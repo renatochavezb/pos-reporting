@@ -1,0 +1,16 @@
+{
+  "name": "dn-extractor-merma",
+  "version": "0.1.0",
+  "description": "Extrae merma de Fuentes Mares (SQL Server) y la sube a Supabase",
+  "type": "module",
+  "main": "extraer_merma.mjs",
+  "scripts": {
+    "merma": "node extraer_merma.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.0.0",
+    "mssql": "^11.0.1",
+    "pg": "^8.13.0",
+    "xlsx": "^0.18.5"
+  }
+}

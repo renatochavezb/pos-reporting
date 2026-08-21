@@ -1,0 +1,23 @@
+# ── SECRETOS — nunca subir ──
+.env
+.env.*
+**/.env
+**/.env.*
+extractor/sucursales.json
+**/sucursales.json
+
+# dependencias
+node_modules/
+**/node_modules/
+
+# builds y salidas locales
+.next/
+**/.next/
+output/
+*.log
+web/dev.log
+extractor/merma_cron.log
+
+# sistema
+.DS_Store
+Thumbs.db

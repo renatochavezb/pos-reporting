@@ -1,0 +1,462 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Epilogue:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ─── Nav item ───────────────────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-left: 2px solid transparent;
+  text-decoration: none;
+  font-family: "Epilogue", sans-serif;
+}
+.nav-item:hover { background: #1E1E1E; color: #CCC; }
+.nav-item.active { color: #FF671D; background: rgba(255,103,29,0.08); border-left-color: #FF671D; }
+
+/* ─── DaisyUI dark base ──────────────────────────────────────── */
+@plugin "daisyui" {
+  themes: dark --default;
+}
+
+/* ─── DaisyUI token overrides ────────────────────────────────── */
+[data-theme="dark"],
+:root {
+  --color-base-100: #0D0D0D;
+  --color-base-200: #141414;
+  --color-base-300: #1A1A1A;
+  --color-base-content: #F4F4F4;
+  --color-primary: #FF671D;
+  --color-primary-content: #FFFFFF;
+  --color-secondary: #FF671D;
+  --color-secondary-content: #FFFFFF;
+  --color-neutral: #1A1A1A;
+  --color-neutral-content: #F4F4F4;
+  --color-accent: #FF671D;
+  --color-accent-content: #FFFFFF;
+}
+
+/* ─── Design tokens ──────────────────────────────────────────── */
+:root {
+  /* Brand palette */
+  --dn-primary:        #FF671D;
+  --dn-primary-dim:    rgba(255, 103, 29, 0.12);
+  --dn-primary-border: rgba(255, 103, 29, 0.3);
+  --dn-primary-hover:  #E55A16;
+
+  --dn-secondary:        #FF671D;
+  --dn-secondary-dim:    rgba(255,103,29,0.15);
+  --dn-secondary-border: rgba(255,103,29,0.15);
+  --dn-secondary-hover:  #3A1070;
+
+  /* Surfaces */
+  --dn-bg:      #0D0D0D;
+  --dn-surface: #141414;
+  --dn-card:    #1A1A1A;
+  --dn-border:  #2A2A2A;
+
+  /* Text */
+  --dn-text:          #F4F4F4;
+  --dn-text-secondary:#999999;
+  --dn-text-muted:    #555555;
+}
+
+/* ─── Base styles ────────────────────────────────────────────── */
+html, body {
+  scroll-behavior: smooth;
+  font-family: "Epilogue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--dn-bg);
+  color: var(--dn-text);
+  min-height: 100vh;
+}
+
+* { box-sizing: border-box; }
+
+/* ─── Typography ─────────────────────────────────────────────── */
+.brand-logo {
+  font-family: "Epilogue", sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dn-primary);
+}
+
+.brand-sub {
+  font-family: "Epilogue", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dn-text-muted);
+}
+
+.section-label {
+  font-family: "Epilogue", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--dn-text-secondary);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────── */
+
+/* Primary — solid orange */
+.btn-orange {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--dn-primary);
+  color: #FFFFFF;
+  font-family: "Epilogue", sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.03em;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-orange:hover {
+  background: var(--dn-primary-hover);
+  box-shadow: 0 0 22px rgba(255, 103, 29, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-orange:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary — solid dark purple */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--dn-secondary);
+  color: #FFFFFF;
+  font-family: "Epilogue", sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--dn-secondary-hover);
+  box-shadow: 0 0 20px rgba(255,103,29,0.15);
+  transform: translateY(-1px);
+}
+
+/* Outlined — border only */
+.btn-outline-orange {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--dn-primary);
+  font-family: "Epilogue", sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  border: 1.5px solid var(--dn-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-orange:hover {
+  background: var(--dn-primary-dim);
+  box-shadow: 0 0 14px rgba(255, 103, 29, 0.2);
+}
+
+/* Ghost */
+.btn-ghost-dn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--dn-text-secondary);
+  font-family: "Epilogue", sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-ghost-dn:hover {
+  background: var(--dn-card);
+  color: var(--dn-text);
+}
+
+/* ─── Cards / Surfaces ───────────────────────────────────────── */
+.card-dn {
+  background: var(--dn-card);
+  border: 1px solid var(--dn-border);
+  border-radius: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.card-dn:hover {
+  border-color: var(--dn-primary-border);
+}
+
+.card-secondary {
+  background: linear-gradient(135deg, #1C0D33 0%, #130A23 100%);
+  border: 1px solid var(--dn-secondary-border);
+  border-radius: 0.75rem;
+}
+
+/* ─── Input ──────────────────────────────────────────────────── */
+.input-dn {
+  width: 100%;
+  background: var(--dn-surface);
+  border: 1px solid var(--dn-border);
+  border-radius: 0.5rem;
+  color: var(--dn-text);
+  font-family: "Epilogue", sans-serif;
+  font-size: 0.875rem;
+  font-weight: 400;
+  padding: 0.625rem 0.875rem;
+  transition: all 0.2s ease;
+  outline: none;
+  resize: none;
+}
+
+.input-dn::placeholder {
+  color: var(--dn-text-muted);
+}
+
+.input-dn:focus {
+  border-color: rgba(255, 103, 29, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 103, 29, 0.08);
+}
+
+/* ─── Chat bubbles ───────────────────────────────────────────── */
+.bubble-user {
+  background: var(--dn-primary);
+  color: #FFFFFF;
+  border-radius: 1rem 1rem 0.25rem 1rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  max-width: 78%;
+  font-family: "Epilogue", sans-serif;
+}
+
+.bubble-dn {
+  background: var(--dn-card);
+  border: 1px solid var(--dn-border);
+  color: var(--dn-text);
+  border-radius: 1rem 1rem 1rem 0.25rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  max-width: 85%;
+  font-family: "Epilogue", sans-serif;
+}
+
+/* ─── Divider ────────────────────────────────────────────────── */
+.divider-dn {
+  height: 1px;
+  background: var(--dn-border);
+  margin: 0;
+}
+
+/* ─── Badges ─────────────────────────────────────────────────── */
+.badge-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--dn-primary-dim);
+  color: var(--dn-primary);
+  border: 1px solid var(--dn-primary-border);
+}
+
+.badge-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--dn-secondary-dim);
+  color: #C084FC;
+  border: 1px solid var(--dn-secondary-border);
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--dn-surface); }
+::-webkit-scrollbar-thumb { background: var(--dn-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--dn-primary); }
+
+/* ─── Animations ─────────────────────────────────────────────── */
+.fade-up {
+  animation: fadeup 0.35s ease forwards;
+}
+
+@keyframes fadeup {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Loading dots ───────────────────────────────────────────── */
+.loading-dn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.loading-dn span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dn-primary);
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+
+.loading-dn span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dn span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1; }
+}
+
+/* ─── Code/pre blocks ────────────────────────────────────────── */
+pre {
+  background: #080808 !important;
+  border: 1px solid var(--dn-border);
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ─── Utility classes ────────────────────────────────────────── */
+.text-primary   { color: var(--dn-primary); }
+.text-secondary-color { color: var(--dn-secondary); }
+.text-muted     { color: var(--dn-text-muted); }
+.text-secondary-txt { color: var(--dn-text-secondary); }
+
+/* ─── Progress bar ───────────────────────────────────────────── */
+progress::-webkit-progress-value {
+  transition: 0.6s width ease-out;
+  background: var(--dn-primary);
+}
+
+/* ─── DaisyUI overrides ──────────────────────────────────────── */
+.btn { text-transform: none !important; }
+/* ═══════════════════════════════════════════════════════════════
+   BRANDING DASHBOARD — Dulce Noviembre (Material 3, Stitch)
+   ═══════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Libre+Caslon+Text:wght@400;700&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal; font-style: normal; font-size: 24px; line-height: 1;
+  letter-spacing: normal; text-transform: none; display: inline-block;
+  white-space: nowrap; word-wrap: normal; direction: ltr;
+}
+.msym-fill { font-variation-settings: 'FILL' 1; }
+
+.dn-brand {
+  --surface: #fff8f5;
+  --background: #fff8f5;
+  --on-background: #1e1b18;
+  --on-surface: #1e1b18;
+  --on-surface-variant: #524346;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #fbf2ed;
+  --surface-container: #f5ece7;
+  --surface-container-high: #efe6e2;
+  --surface-container-highest: #e9e1dc;
+  --surface-variant: #e9e1dc;
+  --primary: #8a4b5b;
+  --on-primary: #ffffff;
+  --primary-container: #d68c9d;
+  --on-primary-container: #5c2635;
+  --primary-fixed: #ffd9e0;
+  --outline: #847376;
+  --outline-variant: #d6c1c4;
+  --error: #ba1a1a;
+  --tertiary: #75584e;
+  --font-headline: "Libre Caslon Text", serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "JetBrains Mono", monospace;
+  background: var(--background);
+  color: var(--on-background);
+  font-family: var(--font-body);
+}
+.dn-brand .font-headline { font-family: var(--font-headline); }
+.dn-brand .font-label { font-family: var(--font-label); letter-spacing: 0.05em; }
+.ambient-shadow-md { box-shadow: 0px 8px 24px rgba(142, 111, 100, 0.12); }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ── Override paleta: estética "Programa DN" (editorial, suave) ── */
+.dn-brand {
+  --background: #FBF6F1;
+  --surface: #FBF6F1;
+  --surface-container-lowest: #FFFFFF;
+  --surface-container-low: #F7EFEA;
+  --surface-container: #F2E8E2;
+  --surface-container-high: #EEE3DC;
+  --surface-container-highest: #E9DDD6;
+  --surface-variant: #F2E8E2;
+  --on-background: #40302E;
+  --on-surface: #40302E;
+  --on-surface-variant: #9E8B84;
+  --primary: #C17C8A;
+  --on-primary: #FFFFFF;
+  --primary-container: #F3DBDF;
+  --on-primary-container: #8A4B5B;
+  --primary-fixed: #F0D7DC;
+  --outline: #C4B4AD;
+  --outline-variant: #EDE2DC;
+  --error: #b4534e;
+  --rose-hero: #D69AA4;
+  --mauve-hero: #B58C82;
+  --bar-fill: #D99AA4;
+  --bar-track: #F1E7E2;
+  --muted-soft: #C4B4AD;
+}
+.eyebrow { font-family: var(--font-label); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--on-surface-variant); }
