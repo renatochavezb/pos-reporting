@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/libs/supabase/server";
 import ButtonAccount from "@/components/ButtonAccount";
 import BotonActualizar from "@/components/BotonActualizar";
-import SubirPrecios from "@/components/SubirPrecios";
+import Sidebar from "@/components/Sidebar";
 import GraficaSemanal from "@/components/GraficaSemanal";
 
 export const dynamic = "force-dynamic";
@@ -32,12 +32,6 @@ function Barra({ pct }) {
     </div>
   );
 }
-
-const GRUPOS = [
-  { titulo: "Gerencia", items: [{ icon: "◆", label: "Dashboard", active: true }] },
-  { titulo: "Datos", items: [{ icon: "✎", label: "Merma" }, { icon: "≡", label: "Ventas" }] },
-  { titulo: "Administración", items: [{ icon: "✦", label: "Precios" }, { icon: "⌂", label: "Sucursales" }, { icon: "⚙", label: "Ajustes" }] },
-];
 
 export default async function DashboardMerma({ searchParams }) {
   const supabase = await createClient();
@@ -97,42 +91,9 @@ export default async function DashboardMerma({ searchParams }) {
       ? ((Number(semActual.pesos || 0) - Number(semPrev.pesos)) / Number(semPrev.pesos)) * 100
       : null;
 
-  const navPill = "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors";
-
   return (
     <div className="dn-brand flex min-h-screen">
-      {/* ── Sidebar ── */}
-      <nav className="w-[260px] fixed left-0 top-0 h-screen hidden md:flex flex-col bg-[var(--surface)] border-r border-[var(--outline-variant)] z-40">
-        <div className="flex flex-col h-full px-5 py-6">
-          <div className="mb-8">
-            <h2 className="font-headline italic text-3xl text-[var(--primary)] leading-none">Dn.</h2>
-            <p className="eyebrow mt-2">Reportes DN · v1.0</p>
-          </div>
-          <div className="flex flex-col gap-6 flex-grow">
-            {GRUPOS.map((g) => (
-              <div key={g.titulo}>
-                <p className="eyebrow mb-2 px-1">{g.titulo}</p>
-                <ul className="flex flex-col gap-0.5">
-                  {g.items.map((n) => (
-                    <li key={n.label}>
-                      <span
-                        className={`${navPill} cursor-default ${
-                          n.active
-                            ? "bg-[var(--primary-container)] text-[var(--on-primary-container)] font-semibold"
-                            : "text-[var(--on-surface-variant)] hover:bg-[var(--surface-container-low)]"
-                        }`}
-                      >
-                        <span className="w-4 text-center">{n.icon}</span>
-                        {n.label}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </nav>
+      <Sidebar />
 
       {/* ── Main ── */}
       <main className="flex-1 md:ml-[260px] flex flex-col min-h-screen">
@@ -172,18 +133,13 @@ export default async function DashboardMerma({ searchParams }) {
             ))}
           </div>
 
-          {/* Aviso + lista de precios */}
-          <div className="flex flex-col lg:flex-row gap-4">
-            {sinPrecio.length > 0 && (
-              <p className="flex-grow text-sm text-[var(--on-surface-variant)] self-center">
-                <span className="text-[var(--primary)]">Sin precio en tu lista:</span>{" "}
-                {sinPrecio.map((p) => p.insumo).join(", ")}. No se valorizan hasta agregarlos.
-              </p>
-            )}
-            <div className="lg:max-w-md lg:ml-auto w-full">
-              <SubirPrecios ultimaCarga={ultimaCarga} />
-            </div>
-          </div>
+          {/* Aviso: productos sin precio en la lista */}
+          {sinPrecio.length > 0 && (
+            <p className="text-sm text-[var(--on-surface-variant)]">
+              <span className="text-[var(--primary)]">Sin precio en tu lista:</span>{" "}
+              {sinPrecio.map((p) => p.insumo).join(", ")}. Agrégalos en la sección <b>Precios</b> para que se valoricen.
+            </p>
+          )}
 
           {/* ★ SEMANA EN CURSO — lo principal ★ */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

@@ -34,11 +34,11 @@ export default function BotonActualizar({ sucursal }) {
       onClick={actualizar}
       disabled={cargando}
       title={`Actualizar ${sucursal || ""}`}
-      className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-label text-[12px] border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary-container)] transition-colors disabled:opacity-60"
+      className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium border border-[var(--outline-variant)] text-[var(--primary)] bg-[var(--surface-container-lowest)] hover:bg-[var(--primary-container)] hover:border-[var(--primary-container)] transition-colors disabled:opacity-60"
     >
-      <span className={`material-symbols-outlined text-[18px] ${cargando ? "animate-spin" : ""}`}>
-        {cargando ? "progress_activity" : "refresh"}
-      </span>
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${cargando ? "animate-spin" : ""}`}>
+        <path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+      </svg>
       {cargando ? "Actualizando…" : "Actualizar"}
     </button>
   );
