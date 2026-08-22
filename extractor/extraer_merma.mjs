@@ -12,13 +12,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import sql from 'mssql';
 import pg from 'pg';
+import { clasificarMotivo } from './motivo.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const COLS = [
   'sucursal', 'no_transaccion', 'tipo', 'fecha', 'fecha_hora', 'folio',
   'no_insumo', 'insumo', 'categoria', 'unidad', 'cantidad', 'costo_unitario',
-  'importe', 'costo_confiable', 'motivo', 'usuario', 'modulo',
+  'importe', 'costo_confiable', 'motivo', 'usuario', 'modulo', 'insumo_norm',
+  'motivo_tipo', 'fecha_merma',
 ];
 
 const sucursales = JSON.parse(readFileSync(join(__dirname, 'sucursales.json'), 'utf8'));
@@ -60,7 +62,14 @@ async function upsert(cliente, filas) {
   const pool = new pg.Pool({ connectionString: process.env.SUPABASE_DB_URL, ssl: { rejectUnauthorized: false } });
   const cliente = await pool.connect();
   try {
-    for (const b of sucursales) {
+    // Filtro opcional: si se pasa una sucursal como argumento, solo esa.
+    // Sin argumento -> todas (así corre el automatico de las 9pm).
+    const filtro = (process.argv[2] || "").trim().toUpperCase();
+    const lista = filtro
+      ? sucursales.filter((b) => (b.sucursal || "").toUpperCase() === filtro || (b.alias || "").toUpperCase() === filtro)
+      : sucursales;
+    if (filtro && lista.length === 0) console.log(`(ninguna sucursal coincide con "${process.argv[2]}")`);
+    for (const b of lista) {
       const t0 = Date.now();
       try {
         console.log(`\n[${b.alias}] leyendo...`);
@@ -78,7 +87,12 @@ async function upsert(cliente, filas) {
           }
         }
         console.log(`  ${filas.length} movimientos de merma`);
-        filas.forEach((f) => { f.insumo_norm = norm(f.insumo); });
+        filas.forEach((f) => {
+          f.insumo_norm = norm(f.insumo);
+          const cl = clasificarMotivo(f.motivo, f.fecha);
+          f.motivo_tipo = cl.tipo;
+          f.fecha_merma = cl.fecha_merma;
+        });
         if (filas.length) await upsert(cliente, filas);
         const suc = filas[0]?.sucursal || b.sucursal || b.alias;
         await cliente.query(

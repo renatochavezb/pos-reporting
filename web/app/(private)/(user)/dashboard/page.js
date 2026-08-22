@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/libs/supabase/server";
 import ButtonAccount from "@/components/ButtonAccount";
+import BotonActualizar from "@/components/BotonActualizar";
 import SubirPrecios from "@/components/SubirPrecios";
 import GraficaSemanal from "@/components/GraficaSemanal";
 
@@ -47,13 +48,14 @@ export default async function DashboardMerma({ searchParams }) {
   const sucursal =
     sp.sucursal && sucursales.includes(sp.sucursal) ? sp.sucursal : sucursales[0] || "FUENTES MARES";
 
-  const [{ data: diaria }, { data: productos }, { data: semanas }, { data: sync }, { data: ultimaCarga }] =
+  const [{ data: diaria }, { data: productos }, { data: semanas }, { data: sync }, { data: ultimaCarga }, { data: tipos }] =
     await Promise.all([
       supabase.from("v_merma_diaria").select("*").eq("sucursal", sucursal).order("fecha", { ascending: false }).limit(12),
       supabase.from("v_merma_por_producto").select("*").eq("sucursal", sucursal).order("pesos", { ascending: false, nullsFirst: false }).limit(8),
       supabase.from("v_merma_semanal").select("*").eq("sucursal", sucursal).order("lunes", { ascending: false }).limit(16),
       supabase.from("sync_estado").select("*").eq("sucursal", sucursal).eq("tabla", "merma").maybeSingle(),
       supabase.from("precios_cargas").select("*").order("cargado_en", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("v_merma_por_tipo").select("*").eq("sucursal", sucursal),
     ]);
 
   const filas = diaria || [];
@@ -147,7 +149,10 @@ export default async function DashboardMerma({ searchParams }) {
                 Actualizado {fechaHora(sync?.ultima_corrida)}{sync?.filas != null && ` · ${sync.filas} movimientos`}
               </p>
             </div>
-            <ButtonAccount />
+            <div className="flex items-center gap-3">
+              <BotonActualizar sucursal={sucursal} />
+              <ButtonAccount />
+            </div>
           </div>
 
           {/* Pestañas de sucursal */}
@@ -213,6 +218,34 @@ export default async function DashboardMerma({ searchParams }) {
               <p className="font-headline text-4xl md:text-5xl font-bold tnum mt-4">{semPrev ? pesos0(semPrev.pesos) : "—"}</p>
               <p className="text-sm text-white/80 mt-2">{semPrev ? `${semPrev.piezas} piezas` : "sin registro"}</p>
             </div>
+          </div>
+
+          {/* Clasificación por motivo */}
+          <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] px-5 py-4">
+            <p className="eyebrow mb-3">Clasificación de la merma · todo el periodo</p>
+            <div className="flex flex-wrap gap-x-10 gap-y-4">
+              {[
+                { k: "caducidad", icon: "⏳" },
+                { k: "daño", icon: "💥" },
+                { k: "sin clasificar", icon: "❓" },
+              ].map(({ k, icon }) => {
+                const row = (tipos || []).find((t) => t.tipo === k) || { piezas: 0, pesos: 0 };
+                return (
+                  <div key={k} className="flex items-center gap-3">
+                    <span className="text-xl">{icon}</span>
+                    <div>
+                      <p className="eyebrow">{k}</p>
+                      <p className="font-headline text-2xl text-[var(--on-surface)] leading-none mt-1">
+                        {Number(row.piezas || 0)} <span className="text-sm text-[var(--on-surface-variant)]">pz</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-[var(--on-surface-variant)] mt-4">
+              Se toma del comentario del POS. Si trae fecha (ej. &quot;DAÑO 21/08/2026&quot;), la merma se asigna a ese día.
+            </p>
           </div>
 
           {/* Gráfica histórico semanal */}
