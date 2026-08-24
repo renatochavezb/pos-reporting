@@ -13,7 +13,7 @@ export async function POST(req) {
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   let sucursal = null;
-  try { const b = await req.json(); if (typeof b?.sucursal === "string") sucursal = b.sucursal; } catch {}
+  try { const b = await req.json(); if (typeof b?.sucursal === "string") sucursal = b.sucursal; } catch { /* cuerpo invalido o vacio: se corre sin filtro de sucursal */ }
 
   const cwd = path.join(process.cwd(), "..", "extractor");
   const opts = { cwd, timeout: 90000, windowsHide: true, maxBuffer: 1024 * 1024 };

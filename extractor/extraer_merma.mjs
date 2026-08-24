@@ -26,19 +26,47 @@ const COLS = [
 const sucursales = JSON.parse(readFileSync(join(__dirname, 'sucursales.json'), 'utf8'));
 const consulta = readFileSync(join(__dirname, '..', 'sql', 'extraccion_merma.sql'), 'utf8');
 
-async function leer(b) {
+async function leer(b, desde) {
   const cfg = {
     server: b.host, port: b.port || 1433, user: b.user, password: b.pass, database: b.db,
     options: { encrypt: false, trustServerCertificate: true, useUTC: false },
     connectionTimeout: 30000, requestTimeout: 120000,
   };
   const pool = await sql.connect(cfg);
-  try { return (await pool.request().query(consulta)).recordset; }
+  try {
+    return (await pool.request()
+      .input('desde', sql.DateTime, new Date(`${desde}T00:00:00`))
+      .query(consulta)).recordset;
+  }
   finally { await pool.close(); }
 }
 
 const limpiar = (v) => (typeof v === 'string' ? v.trim() : v);
 const norm = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/* Piso historico: no se extrae nada anterior a esta fecha. */
+const PISO = '2026-07-01';
+
+/* Ventana de extraccion de UNA sucursal.
+   - Sin datos en Supabase -> backfill completo desde el piso.
+   - Con datos             -> solo el incremento: la ultima fecha ya extraida
+     menos un dia de traslape, para alcanzar capturas tardias y cancelaciones
+     (tipo 19). Releer es seguro: el UPSERT va por (sucursal, no_transaccion),
+     asi que actualiza en vez de duplicar.
+   Derivarlo de max(fecha) lo hace autocurable: si falla una noche, la corrida
+   siguiente cubre el hueco sola, sin intervencion. */
+async function ventanaDe(cliente, b, override) {
+  if (override) return { desde: override, modo: 'manual' };
+  const suc = b.sucursal || b.alias;
+  const r = await cliente.query(
+    'select max(fecha)::text as ultima from merma where sucursal = $1', [suc]);
+  const ultima = r.rows[0]?.ultima;
+  if (!ultima) return { desde: PISO, modo: 'BACKFILL' };
+  const d = new Date(`${ultima}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  const desde = d.toISOString().slice(0, 10);
+  return { desde: desde < PISO ? PISO : desde, modo: 'incremental' };
+}
 
 async function upsert(cliente, filas) {
   const LOTE = 100;
@@ -62,18 +90,28 @@ async function upsert(cliente, filas) {
   const pool = new pg.Pool({ connectionString: process.env.SUPABASE_DB_URL, ssl: { rejectUnauthorized: false } });
   const cliente = await pool.connect();
   try {
-    // Filtro opcional: si se pasa una sucursal como argumento, solo esa.
-    // Sin argumento -> todas (así corre el automatico de las 9pm).
-    const filtro = (process.argv[2] || "").trim().toUpperCase();
+    // Argumentos: [sucursal] [--desde YYYY-MM-DD]
+    // Sin sucursal -> todas (así corre el automatico de las 9pm).
+    // --desde fuerza la ventana; sirve para rehacer un backfill a mano.
+    const args = process.argv.slice(2);
+    const iDesde = args.indexOf('--desde');
+    const override = iDesde >= 0 ? (args[iDesde + 1] || '').trim() : '';
+    if (iDesde >= 0 && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(override)) {
+      console.error('--desde requiere una fecha YYYY-MM-DD');
+      process.exit(1);
+    }
+    const filtro = (args.filter((a) => !a.startsWith('--') && a !== override)[0] || "").trim().toUpperCase();
     const lista = filtro
       ? sucursales.filter((b) => (b.sucursal || "").toUpperCase() === filtro || (b.alias || "").toUpperCase() === filtro)
       : sucursales;
-    if (filtro && lista.length === 0) console.log(`(ninguna sucursal coincide con "${process.argv[2]}")`);
+    if (filtro && lista.length === 0) console.log(`(ninguna sucursal coincide con "${filtro}")`);
     for (const b of lista) {
       const t0 = Date.now();
       try {
         console.log(`\n[${b.alias}] leyendo...`);
-        let filas = await leer(b);
+        const v = await ventanaDe(cliente, b, override);
+        console.log(`  ventana: ${v.modo} desde ${v.desde}`);
+        let filas = await leer(b, v.desde);
         // BLINDAJE: tomar SOLO la sucursal canonica del servidor.
         // Evita arrastrar datos viejos de otra sucursal (ej. el servidor de
         // Misiones/JUAREZ 3 antes fue CANTERA y conserva datos de CANTERA que

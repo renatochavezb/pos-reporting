@@ -12,9 +12,9 @@ Mares) de punta a punta.** Los problemas salen con una tienda, no con doce.
 
 - **Qué:** agente que genera reportes de **ventas** y **merma** para Dulce
   Noviembre (12 sucursales), diario, con dashboard + exportación a Excel.
-- **Alcance de datos (por ahora):** **ventana rodante = mes en curso + mes
-  anterior** (para comparar). No el histórico de 5 años. Se puede ampliar
-  después.
+- **Alcance de datos:** **piso fijo en el 1 de julio de 2026**. Al conectar una
+  sucursal se trae su historial desde esa fecha; de ahí en adelante solo el
+  incremento del día. No el histórico de 5 años.
 - **Prioridad:** ventas (1), merma (2), financieros (después).
 - **Usuarios:** multi-usuario con roles: Supervisión, Gerencia, Dirección.
 
@@ -29,7 +29,7 @@ Mares) de punta a punta.** Los problemas salen con una tienda, no con doce.
         ▼
   EXTRACTOR (Node.js)  ·  en esta PC hoy → en la Jetson después
         │   • corre las consultas ya validadas (reglas de negocio aplicadas)
-        │   • trae SOLO la ventana rodante
+        │   • trae SOLO la ventana que le toca a cada sucursal
         │   • hace UPSERT (idempotente) en Supabase
         ▼
   SUPABASE / Postgres  ·  almacén central + Auth + RLS (roles) + API
@@ -85,7 +85,7 @@ consultas de extracción para aplicarse **idénticas siempre**.
 
 ## 4. Modelo de datos en Supabase
 
-### Tablas de hechos (ventana rodante, refresco por UPSERT)
+### Tablas de hechos (refresco por UPSERT)
 - **`ventas`** — una fila por ticket cobrado. PK `(sucursal, no_ticket, letra)`.
   Campos: dia_negocio, fecha_hora_cobro, tipo_venta, condicion, subtotal, iva,
   total, costo (con guarda), descuento, propina, usuario_cobro, turno.
@@ -122,11 +122,15 @@ Así no duplicamos lógica.
 - **Tecnología:** Node.js. Conecta a cada sucursal con `mssql` (usuario
   `reportes_ro`, solo lectura) y sube a Supabase con conexión Postgres directa
   o `@supabase/supabase-js` (llave `service_role`, **solo del lado servidor**).
-- **Estrategia = refresco de ventana rodante + UPSERT** (no marca de agua fina).
-  Cada corrida vuelve a traer el mes en curso + anterior y hace UPSERT. Ventajas
-  para no tener problemas: es **idempotente**, se **autocorrige** solo (si un
-  ticket pasó de IMPRESO a PAGADO, si hubo cancelación o corrección de costo,
-  se refleja al día siguiente). Volumen chico (~2,000 tickets/sucursal/mes).
+- **Estrategia = backfill al conectar + incremento diario, siempre con UPSERT.**
+  La ventana la decide el extractor por sucursal, consultando `max(fecha)` en
+  Supabase: sin datos trae desde el piso (`2026-07-01`), con datos trae desde la
+  última fecha extraída menos un día de traslape. Ventajas para no tener
+  problemas: es **idempotente** (el UPSERT va por `(sucursal, no_transaccion)`),
+  se **autocorrige** solo (si un ticket pasó de IMPRESO a PAGADO, si hubo
+  cancelación o corrección de costo, se refleja al día siguiente) y **se autocura**
+  (si falla una noche, `max(fecha)` sigue atrasado y la corrida siguiente cubre
+  el hueco sola). Volumen chico y **plano**: no crece con el tiempo.
 - **Por sucursal, en serie**, con timeout. Si una está caída: se salta, se
   marca en `sync_estado`, y las demás siguen. El dashboard usa lo último bueno.
 - **Cuándo:** 1×/día en horario muerto (Task Scheduler en esta PC, o cron en la
@@ -173,7 +177,7 @@ hechos que filtran por ese mapeo:
 - **Fase 0 — Acceso ✅ (hecho):** `reportes_ro` en Fuentes Mares, conexión
   remota probada, SQL de ventas y merma validado contra datos reales.
 - **Fase 1 — Piloto Fuentes Mares:** proyecto Supabase + esquema; extractor
-  Node (ventana rodante, upsert); vistas; **validar ventas contra la
+  Node (backfill + incremento diario, upsert); vistas; **validar ventas contra la
   supervisora**; dashboard básico + Excel.
 - **Fase 2 — Escalar a las 11:** `reportes_ro` en cada una (TeamViewer + script);
   el extractor itera sucursales; consolidado.

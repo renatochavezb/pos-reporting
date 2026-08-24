@@ -4,7 +4,9 @@
    Una fila por movimiento de merma del kardex:
      tipo 18 = MERMAS EN PUNTO DE VENTA
      tipo 19 = su cancelacion (entra con signo contrario y netea)
-   Ventana rodante: mes en curso + mes anterior.
+   Ventana: la decide el extractor por sucursal. Piso 2026-07-01
+   en la primera corrida de una sucursal (backfill del historico
+   desde julio 2026); despues, solo el incremento del dia.
    Valorizada contra el costo vigente a la fecha.
    Motivo enlazado por Folio = NoMerma (verificado).
 
@@ -14,8 +16,11 @@
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 SET NOCOUNT ON;
 
--- 1o del mes anterior (mes en curso + anterior)
-DECLARE @desde datetime = DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0);
+/* @desde lo manda el extractor como parametro:
+     - sucursal sin datos en Supabase -> '2026-07-01' (backfill)
+     - sucursal con datos             -> ultima fecha extraida menos un dia
+   Para correr esta consulta a mano en SSMS, descomenta la linea siguiente:
+   DECLARE @desde datetime = '2026-07-01'; */
 
 SELECT
     k.Sucursal                                        AS sucursal,
