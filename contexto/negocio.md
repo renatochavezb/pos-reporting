@@ -72,7 +72,7 @@ La **semana en curso es siempre lo primero**. La comparación relevante es seman
 semana pasada, con su variación. El resto (histórico, productos críticos, por tipo) es
 secundario.
 
-### Comparabilidad en el consolidado (hito 6)
+### Comparabilidad en el consolidado
 
 En **toda la cadena**, comparar el total bruto de la semana actual contra el de la semana pasada
 solo es honesto si aportó **el mismo conjunto de sucursales** en ambas. Si entró una sucursal

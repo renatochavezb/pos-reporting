@@ -146,6 +146,19 @@ colisionar con el nombre real de una sucursal en el POS (los nombres canónicos 
 texto libre en mayúsculas). Los dobles guion bajo lo marcan como un valor reservado del
 sistema, no un dato de negocio, y hacen improbable la colisión.
 
+## El padrón de sucursales todavía no distingue quién lo ve
+
+La tabla `sucursales` se creó con la misma política que todo lo demás hoy:
+`for select to authenticated using (true)`. Cualquier usuario con sesión ve las 12.
+
+Mientras no existan roles, no es un problema: el RLS de `merma` también es `using (true)`.
+Pero **el día que se construya el RLS por sucursal, hay que filtrar también este catálogo**. Si
+no, un supervisor de una plaza vería en "Aporte por sucursal" los nombres de las 12 tiendas con
+ceros, y en la línea de cobertura un denominador que no le corresponde.
+
+La línea de cobertura es lo que evita el daño mayor —que alguien crea que está viendo la cadena
+completa cuando solo ve su parte—, pero no sustituye a la política.
+
 ## Seguridad
 
 - Solo lectura en el POS (`reportes_ro`, `READ UNCOMMITTED`): la aplicación nunca modifica la
