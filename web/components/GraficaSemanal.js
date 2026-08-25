@@ -14,14 +14,21 @@ function niceCeil(x) {
   return m * p;
 }
 
-export default function GraficaSemanal({ data = [] }) {
+// Hito 6 (F15) — prop OPCIONAL `sucursalesPorPunto`: arreglo paralelo a `data`, con el número
+// de sucursales que aportaron esa semana. Solo la manda el consolidado (viene de
+// `v_consolidado_semanal.sucursales_aportantes`, ya incluido en las filas que `dashboard/page.js`
+// ya trae -- ninguna consulta nueva). Cuando NO viene (vista de una sola sucursal), el
+// componente se comporta exactamente igual que antes de este hito: no hay marca en los puntos,
+// el tooltip no gana la línea de "N sucursales" y no aparece la nota al pie.
+export default function GraficaSemanal({ data = [], sucursalesPorPunto }) {
   const [metric, setMetric] = useState("costo"); // 'costo' | 'unidades'
   const [hover, setHover] = useState(null);
 
-  const puntos = data.map((d) => ({
+  const puntos = data.map((d, i) => ({
     label: diaMes(d.lunes),
     semana: d.semana,
     val: metric === "costo" ? Number(d.pesos || 0) : Number(d.piezas || 0),
+    nSucursales: sucursalesPorPunto != null ? Number(sucursalesPorPunto[i] ?? 0) : null,
   }));
 
   if (puntos.length < 2) {
@@ -51,6 +58,13 @@ export default function GraficaSemanal({ data = [] }) {
   const cada = puntos.length > 9 ? 2 : 1;
 
   const LINE = "#8A4B5B", FILL = "#D99AA4";
+
+  // Hito 6 (F15) — un punto queda "marcado" cuando el número de sucursales cambió respecto al
+  // punto anterior. Con `sucursalesPorPunto` ausente, `marcada()` siempre da false: cero
+  // diferencia visual con el componente de antes.
+  const marcada = (i) =>
+    sucursalesPorPunto != null && i > 0 && puntos[i].nSucursales !== puntos[i - 1].nSucursales;
+  const hayMarcadas = sucursalesPorPunto != null && puntos.some((_, i) => marcada(i));
 
   return (
     <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] px-5 py-5">
@@ -102,9 +116,13 @@ export default function GraficaSemanal({ data = [] }) {
         {/* puntos */}
         {puntos.map((p, i) => {
           const last = i === puntos.length - 1;
+          const marca = marcada(i);
           return (
             <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: "pointer" }}>
               <circle cx={x(i)} cy={y(p.val)} r="12" fill="transparent" />
+              {marca && (
+                <text x={x(i)} y={y(p.val) - 12} textAnchor="middle" fontSize="11" fill={LINE} fontFamily="Manrope">▲</text>
+              )}
               <circle cx={x(i)} cy={y(p.val)} r="5" fill={last || hover === i ? LINE : "#fff"} stroke={LINE} strokeWidth="2.5" />
               {(i % cada === 0 || last) && (
                 <text x={x(i)} y={H - 12} textAnchor="middle" fontSize="11" fill="#9E8B84" fontFamily="Manrope">{p.label}</text>
@@ -116,14 +134,19 @@ export default function GraficaSemanal({ data = [] }) {
         {/* tooltip */}
         {hover != null && (() => {
           const p = puntos[hover];
+          const conSucursales = p.nSucursales != null;
           const tx = Math.min(Math.max(x(hover), L + 40), W - R - 40);
-          const ty = y(p.val) - 42;
+          const alto = conSucursales ? 48 : 34;
+          const ty = y(p.val) - (conSucursales ? 56 : 42);
           const val = metric === "costo" ? money0(p.val) : `${p.val} pz`;
           return (
             <g>
-              <rect x={tx - 46} y={ty} width="92" height="34" rx="8" fill="#40302E" />
+              <rect x={tx - 46} y={ty} width="92" height={alto} rx="8" fill="#40302E" />
               <text x={tx} y={ty + 14} textAnchor="middle" fontSize="10" fill="#D9C6BF" fontFamily="JetBrains Mono">Sem {p.semana}</text>
               <text x={tx} y={ty + 27} textAnchor="middle" fontSize="12" fill="#fff" fontFamily="Manrope" fontWeight="600">{val}</text>
+              {conSucursales && (
+                <text x={tx} y={ty + 41} textAnchor="middle" fontSize="10" fill="#D9C6BF" fontFamily="JetBrains Mono">{p.nSucursales} sucursales</text>
+              )}
             </g>
           );
         })()}
@@ -132,6 +155,11 @@ export default function GraficaSemanal({ data = [] }) {
       <p className="text-xs text-[var(--on-surface-variant)] mt-4">
         Cada punto es una semana. Línea punteada = promedio del periodo. Pasa el cursor sobre un punto para ver el detalle.
       </p>
+      {hayMarcadas && (
+        <p className="text-xs text-[var(--on-surface-variant)] mt-1">
+          ▲ marca las semanas en que cambió el número de sucursales conectadas: el brinco no es merma, es cobertura.
+        </p>
+      )}
     </div>
   );
 }

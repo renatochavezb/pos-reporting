@@ -13,7 +13,10 @@ Son dos proyectos en un mismo repositorio:
 - `web/` — Next.js 15 (App Router, React 19) + Tailwind v4. Corre en **puerto 4000**
   (el 3000 lo ocupa otro proyecto en esta PC).
 - `sql/` — consultas de referencia contra el POS.
-- `supabase/` — esquema, vistas y migraciones.
+- `supabase/` — esquema, vistas y migraciones **planas** (no hay carpeta `migrations/`):
+  `migracion_NN_<nombre>.sql` en la raíz de `supabase/`, numeradas en orden. **Solo se crean
+  archivos nuevos, nunca se edita uno existente.** Se aplican pegándolas en el SQL Editor de
+  Supabase o con `node extractor/aplicar_sql.mjs <ruta.sql>`; nunca con `supabase db push`.
 
 ## Comandos
 
@@ -23,6 +26,9 @@ cd web && npm run build        # verificar que el tablero compila
 cd extractor && npm run merma  # extraer todas las sucursales
 node extraer_merma.mjs "FUENTES MARES"   # una sola sucursal
 ```
+
+- `/dashboard?sucursal=__cadena__` — vista consolidada de toda la cadena. El resto de las
+  pestañas usa el nombre canónico de cada sucursal en la URL (ver `contexto/datos.md`).
 
 ## Antes de trabajar, lee el contexto
 
@@ -38,7 +44,7 @@ node extraer_merma.mjs "FUENTES MARES"   # una sola sucursal
 ## Reglas de código
 
 - Español en UI, comentarios y commits.
-- El extractor usa módulos `.mjs`. El web usa TypeScript.
+- El extractor usa módulos `.mjs`. El web usa JavaScript (`.js`), sin TypeScript.
 - Toda consulta al POS es **solo lectura**, con `READ UNCOMMITTED`.
 - Las vistas de Supabase son `security_invoker` con RLS.
 

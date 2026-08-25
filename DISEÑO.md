@@ -108,7 +108,13 @@ consultas de extracción para aplicarse **idénticas siempre**.
 - `v_ventas_diarias` (sucursal × día: tickets, venta_neta, ticket_prom, margen)
 - `v_ventas_por_producto`, `v_ventas_formas_pago`
 - `v_merma_diaria`, `v_merma_por_producto`, `v_merma_por_motivo`
-- `v_consolidado` (las 12 juntas, para Dirección)
+- `v_consolidado` (las 12 juntas, para Dirección) — **construida**: es la familia de vistas
+  `v_consolidado_*` en Supabase (`v_consolidado_diaria`, `v_consolidado_semanal`,
+  `v_consolidado_aporte_semanal`, `v_consolidado_por_producto`, `v_consolidado_por_tipo`,
+  `v_consolidado_por_region`, `v_consolidado_cobertura`, `v_consolidado_insumos_hueco`,
+  `v_consolidado_costo_sospechoso`, `v_consolidado_regiones_espejo`), servida en
+  `/dashboard?sucursal=__cadena__`. Hoy solo cubre merma (2 de 12 sucursales dadas de alta en
+  el padrón); ventas sigue sin construirse. Ver `contexto/datos.md` y `contexto/estado.md`.
 
 **Dónde se calcula qué:** las reglas de negocio complejas (día de negocio,
 guarda de costo, estado 3, etc.) se aplican en la **consulta de extracción**

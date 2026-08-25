@@ -15,12 +15,28 @@ De las 12, el trabajo va sucursal por sucursal.
 | CANTERA (la real)   | —                | Pendiente. Es una tienda distinta de Misiones/Juárez 3 |
 | Las 8 restantes     | —                | Pendientes de conectar |
 
+### Padrón del consolidado (tabla `sucursales`)
+
+Distinto de la tabla de arriba (que es sobre la conexión del extractor al POS de cada
+sucursal): el **padrón** del consolidado de cadena vive en la tabla `sucursales` de Supabase,
+y hoy tiene **2 de 12** filas dadas de alta:
+
+| `sucursal` (canónico) | `nombre_display` | `region` |
+|---|---|---|
+| `FUENTES MARES` | FUENTES MARES | CHIHUAHUA |
+| `JUAREZ 3` | MISIONES | JUAREZ |
+
+Agregar las otras diez es **insertar filas**, no escribir código: sin migración, sin
+redeploy. Ver el flujo completo en `contexto/datos.md`, "Conectar una sucursal nueva al
+consolidado" (incluye también la fila en `sucursal_region` y la lista de precios de su región).
+
 ## Módulos
 
 | Módulo | Estado |
 |---|---|
 | Merma — extractor | Funcionando |
 | Merma — dashboard | Funcionando (`/dashboard`) |
+| Merma — consolidado de cadena | Funcionando (`/dashboard?sucursal=__cadena__`) |
 | Precios — carga de Excel por región | Funcionando (`/precios`) |
 | Ventas | **No construido.** Tablas ya mapeadas en `TABLAS.md` |
 | Caja / arqueo | **No construido.** Faltan confirmar columnas de `CortesDeCaja` |
@@ -29,7 +45,10 @@ De las 12, el trabajo va sucursal por sucursal.
 
 1. Conectar las 9 sucursales restantes (Torres solo espera su IP de Hamachi).
 2. **Lista de costos real de Juárez** — hoy viene duplicada de Chihuahua, lo que distorsiona
-   la valorización de esa plaza.
+   la valorización de esa plaza. El tablero de cadena ya no solo lo advierte en texto: la
+   banda de avisos del consolidado **muestra el monto y el porcentaje de pesos** que hoy son
+   costo provisional de Juárez (detectado por espejo de regiones contra Chihuahua). El aviso
+   se apaga solo el día que se cargue la lista real — no requiere cambiar código.
 3. Que el personal llene los comentarios de merma (motivo + fecha día/mes/año). El sistema ya
    lee y clasifica; faltan los datos.
 4. Confirmar columnas de `CortesDeCaja` cuando la red esté estable.
