@@ -292,3 +292,75 @@ export function construirAvisos({ cobertura, regiones, insumosHueco, costoSospec
 
   return avisos;
 }
+
+// Hito 6 (F14/D7) — variación de la semana en curso sobre una BASE COMPARABLE de sucursales,
+// no sobre el total crudo. El `deltaPct` de siempre (semActual.pesos vs semPrev.pesos) miente
+// en modo cadena cuando el conjunto de sucursales que aportó cambió entre las dos semanas: si
+// entró una tienda nueva, el total sube y parece que la merma explotó, aunque cada sucursal
+// individual esté igual.
+//
+// Se calcula con las filas de `v_consolidado_aporte_semanal` que `datosCadena` YA trae
+// (acotadas a [lunesActual, lunesPrevio], máx. 24 filas): ninguna consulta nueva.
+//
+// Cuatro estados, en el orden que exige el plan:
+//   - "sin_previa": no hay fila de la semana pasada -> como hoy, sin píldora ni nota.
+//   - "misma_base": el conjunto de sucursales es idéntico -> el % de siempre (recalculado
+//     desde estas mismas filas, para que quede consistente con la nota) + "misma base: N".
+//   - "base_distinta": el conjunto difiere pero hay intersección -> NUNCA se calcula un %
+//     sobre los totales brutos (esos ya se ven, sin conectarlos, en el héroe y en la tarjeta
+//     "semana pasada"); el % que sí se ofrece es sobre la intersección, con su nota de qué
+//     sucursales se excluyeron.
+//   - "sin_interseccion": la intersección es vacía -> nunca un porcentaje, solo "—".
+//
+// `mapaDisplay` es un Map(sucursal canónico -> nombre_display) para que "excluye: ..." se lea
+// en nombres para mostrar, no en claves crudas.
+export function interseccion({ aporte, lunesActual, lunesPrevio, mapaDisplay }) {
+  const filasActual = (aporte || []).filter((a) => a.lunes === lunesActual);
+  const filasPrevia = (aporte || []).filter((a) => a.lunes === lunesPrevio);
+
+  if (filasPrevia.length === 0) {
+    return { estado: "sin_previa", n: null, deltaPct: null, nota: null };
+  }
+
+  const sumaPesos = (filas, subset) =>
+    filas
+      .filter((a) => !subset || subset.has(a.sucursal))
+      .reduce((acc, a) => acc + Number(a.pesos || 0), 0);
+
+  const setActual = new Set(filasActual.map((a) => a.sucursal));
+  const setPrevia = new Set(filasPrevia.map((a) => a.sucursal));
+  const mismaBase =
+    setActual.size === setPrevia.size && [...setActual].every((s) => setPrevia.has(s));
+  const plural = (n) => (n === 1 ? "sucursal" : "sucursales");
+  const display = (s) => mapaDisplay?.get(s) || s;
+
+  if (mismaBase) {
+    const pActual = sumaPesos(filasActual);
+    const pPrevia = sumaPesos(filasPrevia);
+    return {
+      estado: "misma_base",
+      n: setActual.size,
+      deltaPct: pPrevia > 0 ? ((pActual - pPrevia) / pPrevia) * 100 : null,
+      nota: `misma base: ${setActual.size} ${plural(setActual.size)}`,
+    };
+  }
+
+  const comunes = new Set([...setActual].filter((s) => setPrevia.has(s)));
+  if (comunes.size === 0) {
+    return { estado: "sin_interseccion", n: 0, deltaPct: null, nota: "sin base comparable" };
+  }
+
+  const pActualComun = sumaPesos(filasActual, comunes);
+  const pPreviaComun = sumaPesos(filasPrevia, comunes);
+  const excluidas = [...new Set([...setActual, ...setPrevia])]
+    .filter((s) => !comunes.has(s))
+    .map(display)
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    estado: "base_distinta",
+    n: comunes.size,
+    deltaPct: pPreviaComun > 0 ? ((pActualComun - pPreviaComun) / pPreviaComun) * 100 : null,
+    nota: `base comparable: ${comunes.size} ${plural(comunes.size)} (excluye: ${excluidas.join(", ")})`,
+  };
+}

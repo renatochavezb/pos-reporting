@@ -56,6 +56,25 @@ precios, equivalencias faltantes, comentarios sin fecha) antes de tocar la lógi
 
 ---
 
+## Hito 6 — base comparable y clasificación completa (2026-08-25)
+
+- **`interseccion()` en `web/libs/consolidado.js`** calcula la comparabilidad entre semanas sin
+  ninguna consulta nueva: reusa las filas de `v_consolidado_aporte_semanal` que `datosCadena` ya
+  trae acotadas a `[lunesActual, lunesPrevio]`. Devuelve un estado (`sin_previa` / `misma_base` /
+  `base_distinta` / `sin_interseccion`) más `deltaPct` y `nota` ya listos para pintar, para que
+  `dashboard/page.js` no tenga que repetir la lógica de decidir cuándo un % es honesto.
+- En `misma_base`, el `deltaPct` se recalcula desde las filas de aporte (no se reusa
+  `semActual.pesos`/`semPrev.pesos` de `v_consolidado_semanal`). Numéricamente deben coincidir
+  siempre que la base sea idéntica (son la misma suma agrupada distinto); se prefirió esta
+  fuente por ser la que exige el hito y porque así toda la lógica de comparabilidad vive en un
+  solo lugar.
+- **`PanelClasificacion` (solo consolidado) no filtra por una lista fija de clases**: renderiza
+  toda fila de `v_consolidado_por_tipo` con piezas != 0. Así la suma de las tarjetas es SIEMPRE
+  igual a la suma de la vista, incluso si aparece una clase nueva sin icono propio (cae al icono
+  genérico "•"). El panel de la vista individual, con su lista fija de 3 clases
+  (caducidad/daño/sin clasificar), **no se tocó** — es una decisión de diseño previa, no un
+  descuido: con una sola sucursal, cortesía/otro casi nunca tienen piezas.
+
 ## Seguridad
 
 - Solo lectura en el POS (`reportes_ro`, `READ UNCOMMITTED`): la aplicación nunca modifica la

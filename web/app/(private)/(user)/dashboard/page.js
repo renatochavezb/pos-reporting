@@ -9,6 +9,7 @@ import LineaCobertura from "@/components/consolidado/LineaCobertura";
 import AportePorSucursal from "@/components/consolidado/AportePorSucursal";
 import DesglosePorRegion from "@/components/consolidado/DesglosePorRegion";
 import BandaAvisos from "@/components/consolidado/BandaAvisos";
+import PanelClasificacion from "@/components/consolidado/PanelClasificacion";
 import { pesos0, piezas, diaMes, fechaHora } from "@/libs/formato";
 import {
   CENTINELA,
@@ -19,6 +20,7 @@ import {
   esAproximado,
   construirAvisos,
   limitesSemana,
+  interseccion,
 } from "@/libs/consolidado";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +101,18 @@ export default async function DashboardMerma({ searchParams }) {
     ? (d.cadena.aporte || []).filter((a) => a.lunes === lunesActStr)
     : [];
 
+  // Hito 6 (F14/D7) — variación sobre base comparable, solo modo cadena. Reusa las mismas
+  // filas de `v_consolidado_aporte_semanal` que ya trae `d.cadena.aporte` (sin consulta nueva)
+  // y el mismo mapa sucursal -> nombre_display que ya arma `construirAvisos` internamente.
+  const comparabilidad = esCadena
+    ? interseccion({
+        aporte: d.cadena.aporte,
+        lunesActual: lunesActStr,
+        lunesPrevio: lunesPrevStr,
+        mapaDisplay: new Map((d.cadena.cobertura || []).map((c) => [c.sucursal, c.nombre_display])),
+      })
+    : null;
+
   return (
     <div className="dn-brand flex min-h-screen">
       <Sidebar />
@@ -151,12 +165,22 @@ export default async function DashboardMerma({ searchParams }) {
                 <p className="font-label text-[11px] tracking-[0.14em] uppercase text-white/85">
                   Semana en curso · Sem {semActual.semana}
                 </p>
-                {deltaPct != null && (
+                {!esCadena && deltaPct != null && (
                   <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2.5 py-1 font-label text-[11px]">
                     {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct).toFixed(0)}% vs sem. pasada
                   </span>
                 )}
+                {esCadena && comparabilidad.estado !== "sin_previa" && (
+                  <span className="inline-flex items-center gap-1 bg-white/15 rounded-full px-2.5 py-1 font-label text-[11px]">
+                    {comparabilidad.deltaPct != null
+                      ? `${comparabilidad.deltaPct >= 0 ? "▲" : "▼"} ${Math.abs(comparabilidad.deltaPct).toFixed(0)}% vs sem. pasada`
+                      : "—"}
+                  </span>
+                )}
               </div>
+              {esCadena && comparabilidad.nota && (
+                <p className="text-xs text-white/70 mt-1">{comparabilidad.nota}</p>
+              )}
               <p className="text-sm text-white/80 mt-1">{diaMes(semActual.lunes)} — {diaMes(semActual.domingo)}</p>
               <p className="font-headline text-6xl md:text-7xl font-bold tnum mt-6 leading-none">
                 {aprox.aproximado && "≈"}{pesos0(semActual.pesos)}
@@ -167,7 +191,18 @@ export default async function DashboardMerma({ searchParams }) {
               <div className="flex items-center gap-4 mt-5 text-sm text-white/85">
                 <span className="font-medium">{piezas(semActual.piezas)} piezas</span>
                 <span className="opacity-50">·</span>
-                <span>{semActual.dias_con_captura} días con captura</span>
+                {esCadena ? (
+                  <>
+                    <span>{semActual.dias_con_captura} de 7 días con captura en al menos una sucursal</span>
+                    <span className="opacity-50">·</span>
+                    <span>
+                      cobertura de captura: {semActual.dias_sucursal ?? 0} de{" "}
+                      {(semActual.sucursales_aportantes ?? 0) * 7} días-sucursal
+                    </span>
+                  </>
+                ) : (
+                  <span>{semActual.dias_con_captura} días con captura</span>
+                )}
               </div>
             </div>
 
@@ -195,36 +230,46 @@ export default async function DashboardMerma({ searchParams }) {
           )}
           {esCadena && <DesglosePorRegion regiones={d.cadena.regiones} />}
 
-          {/* Clasificación por motivo */}
-          <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] px-5 py-4">
-            <p className="eyebrow mb-3">Clasificación de la merma · todo el periodo</p>
-            <div className="flex flex-wrap gap-x-10 gap-y-4">
-              {[
-                { k: "caducidad", icon: "⏳" },
-                { k: "daño", icon: "💥" },
-                { k: "sin clasificar", icon: "❓" },
-              ].map(({ k, icon }) => {
-                const row = (d.tipos || []).find((t) => t.tipo === k) || { piezas: 0, pesos: 0 };
-                return (
-                  <div key={k} className="flex items-center gap-3">
-                    <span className="text-xl">{icon}</span>
-                    <div>
-                      <p className="eyebrow">{k}</p>
-                      <p className="font-headline text-2xl text-[var(--on-surface)] leading-none mt-1">
-                        {Number(row.piezas || 0)} <span className="text-sm text-[var(--on-surface-variant)]">pz</span>
-                      </p>
+          {/* Clasificación por motivo — modo cadena usa PanelClasificacion (hito 6, F17/D10):
+              muestra TODAS las clases presentes, no solo las 3 fijas. La vista individual no
+              se toca: sigue siendo exactamente el bloque de siempre. */}
+          {esCadena ? (
+            <PanelClasificacion tipos={d.tipos} cobertura={d.cadena.cobertura} />
+          ) : (
+            <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] px-5 py-4">
+              <p className="eyebrow mb-3">Clasificación de la merma · todo el periodo</p>
+              <div className="flex flex-wrap gap-x-10 gap-y-4">
+                {[
+                  { k: "caducidad", icon: "⏳" },
+                  { k: "daño", icon: "💥" },
+                  { k: "sin clasificar", icon: "❓" },
+                ].map(({ k, icon }) => {
+                  const row = (d.tipos || []).find((t) => t.tipo === k) || { piezas: 0, pesos: 0 };
+                  return (
+                    <div key={k} className="flex items-center gap-3">
+                      <span className="text-xl">{icon}</span>
+                      <div>
+                        <p className="eyebrow">{k}</p>
+                        <p className="font-headline text-2xl text-[var(--on-surface)] leading-none mt-1">
+                          {Number(row.piezas || 0)} <span className="text-sm text-[var(--on-surface-variant)]">pz</span>
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <p className="text-xs text-[var(--on-surface-variant)] mt-4">
+                Se toma del comentario del POS. Si trae fecha (ej. &quot;DAÑO 21/08/2026&quot;), la merma se asigna a ese día.
+              </p>
             </div>
-            <p className="text-xs text-[var(--on-surface-variant)] mt-4">
-              Se toma del comentario del POS. Si trae fecha (ej. &quot;DAÑO 21/08/2026&quot;), la merma se asigna a ese día.
-            </p>
-          </div>
+          )}
 
-          {/* Gráfica histórico semanal */}
-          <GraficaSemanal data={histChart} />
+          {/* Gráfica histórico semanal — sucursalesPorPunto (hito 6, F15) solo en modo cadena;
+              en modo individual GraficaSemanal se comporta exactamente como antes. */}
+          <GraficaSemanal
+            data={histChart}
+            sucursalesPorPunto={esCadena ? histChart.map((s) => s.sucursales_aportantes) : undefined}
+          />
 
           {/* Productos (ranking) + Merma por semana (zonas) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -294,16 +339,34 @@ export default async function DashboardMerma({ searchParams }) {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
+                {/* Columna "sucursales" (hito 6, punto 5) solo en modo cadena, desde
+                    v_consolidado_diaria.sucursales_aportantes. En modo individual la tabla
+                    sigue sin encabezado y sin esta columna, igual que antes. */}
+                {esCadena && (
+                  <thead>
+                    <tr className="font-label text-[11px] uppercase tracking-wider text-[var(--on-surface-variant)]">
+                      <th className="px-5 py-2 font-medium">Fecha</th>
+                      <th className="px-5 py-2 font-medium text-right">Sucursales</th>
+                      <th className="px-5 py-2 font-medium text-right">Piezas</th>
+                      <th className="px-5 py-2 font-medium text-right">Pesos</th>
+                    </tr>
+                  </thead>
+                )}
                 <tbody className="text-[var(--on-surface)]">
                   {filas.map((fila) => (
                     <tr key={fila.fecha} className="border-t border-[var(--outline-variant)]/70">
                       <td className="px-5 py-3 text-sm">{fila.fecha}</td>
+                      {esCadena && (
+                        <td className="px-5 py-3 text-sm text-right tnum text-[var(--on-surface-variant)]">
+                          {fila.sucursales_aportantes}
+                        </td>
+                      )}
                       <td className="px-5 py-3 text-sm text-right tnum text-[var(--on-surface-variant)]">{piezas(fila.piezas)} pz</td>
                       <td className="px-5 py-3 text-right font-headline text-base tnum w-32">{pesos0(fila.pesos)}</td>
                     </tr>
                   ))}
                   {filas.length === 0 && (
-                    <tr><td className="px-5 py-6 text-sm text-[var(--on-surface-variant)]">Sin datos</td></tr>
+                    <tr><td className="px-5 py-6 text-sm text-[var(--on-surface-variant)]" colSpan={esCadena ? 4 : undefined}>Sin datos</td></tr>
                   )}
                 </tbody>
               </table>

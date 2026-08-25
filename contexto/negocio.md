@@ -64,3 +64,27 @@ Los comentarios apenas empezaron a llenarse, así que el histórico tiene mucho
 La **semana en curso es siempre lo primero**. La comparación relevante es semana actual contra
 semana pasada, con su variación. El resto (histórico, productos críticos, por tipo) es
 secundario.
+
+### Comparabilidad en el consolidado (hito 6)
+
+En **toda la cadena**, comparar el total bruto de la semana actual contra el de la semana pasada
+solo es honesto si aportó **el mismo conjunto de sucursales** en ambas. Si entró una sucursal
+nueva (o una dejó de mandar datos), el total sube o baja por cobertura, no por merma, y un
+porcentaje calculado sobre los brutos miente.
+
+Regla: el % de variación de la cadena se calcula sobre la **intersección** de sucursales que
+aportaron en ambas semanas. Si el conjunto es idéntico, es el mismo % de siempre. Si difiere, se
+muestran los dos totales brutos **sin conectarlos con un %**, más un % aparte calculado solo
+sobre las sucursales comunes, etiquetado explícitamente ("base comparable: N sucursales, excluye:
+..."). Si no hay ninguna sucursal en común, nunca se muestra un porcentaje. En la vista de una
+sola sucursal esto no aplica: ahí "base comparable" siempre es esa única sucursal.
+
+### Días con captura no es aditivo en el consolidado
+
+"Días con captura" cuenta días calendario, no días-sucursal: si 2 sucursales capturaron 5 días
+cada una, **no son 10 días**, siguen siendo como máximo 7 (los días de la semana). Por eso el
+consolidado reporta dos números distintos y no los confunde:
+- **Días con captura** = días en que al menos una sucursal capturó (máximo 7 por semana).
+- **Cobertura de captura** = pares (sucursal, día) con datos, sobre el máximo teórico
+  (sucursales aportantes × 7). Este sí es aditivo y sirve para medir qué tan completa fue la
+  semana, no cuántos días calendario tuvo actividad.
