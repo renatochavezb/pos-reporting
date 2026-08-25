@@ -60,6 +60,49 @@ esta restricción protege. Releer un día es seguro: el UPSERT va por
 Ampliar la ventana más allá de esto sigue prohibido sin medir el impacto: la conexión va por
 VPN sobre la red de la tienda.
 
+## Reglas del consolidado
+
+Límites del módulo de consolidado de cadena (`/dashboard?sucursal=__cadena__` y las vistas
+`v_consolidado_*`). Ignorarlos rompe el tablero completo, no solo el consolidado, porque
+todos cuelgan de `merma_costeada`.
+
+1. **`nombre_display` nunca es llave.** No entra a un `group by`, ni a un `join ... on`, ni a
+   un `where`, ni a una URL. Es texto para pantalla, nada más. Agrupar o filtrar por él rompe
+   el módulo porque `merma.sucursal` nunca lo usa — el dato real sigue escrito con el nombre
+   canónico (ver `contexto/decisiones.md`, "Nombre canónico vs. nombre para mostrar").
+2. **Las vistas `v_consolidado_*` no llevan filtros propios de `tipo` ni de `costo_confiable`**
+   (excepto `v_consolidado_insumos_hueco` y `v_consolidado_costo_sospechoso`, que filtran a
+   propósito porque esa es su función de diagnóstico, no de total). El neteo del tipo 18/19 y
+   la exclusión de los tipos 29/30 se heredan de `merma_costeada`. Agregar un filtro de tipo o
+   de costo en una vista del consolidado la descuadra contra la suma de las vistas por
+   sucursal — rompe la conciliación que es la razón de ser del módulo.
+3. **`merma_costeada` solo se modifica con `create or replace view`**, conservando las 18
+   primeras columnas en su orden exacto (nombres, tipos, posición); cualquier columna nueva va
+   al final. **Nunca `drop view merma_costeada` ni `drop ... cascade`**: de ahí cuelgan
+   `v_merma_diaria`, `v_merma_semanal`, `v_merma_por_producto` y `v_merma_por_tipo` — un
+   `cascade` tumba las cuatro y el tablero deja de existir.
+4. En `supabase/` **solo se crean archivos nuevos**, nunca se edita uno existente (ver
+   "Estructura del repo" en `contexto/CLAUDE.md`).
+5. **HALLAZGO IMPORTANTE — dos fuentes de región, que pueden divergir.** Hay dos orígenes
+   independientes del dato "región de una sucursal":
+   - `sucursal_region` es la **autoridad para valorizar**: es la tabla que `merma_costeada`
+     cruza contra `precios` para calcular `costo_unit` e `importe_costo`.
+   - `sucursales.region`, del catálogo del consolidado, es **solo para mostrar y agrupar**
+     (la usan `v_consolidado_cobertura` y `v_consolidado_por_region` como columna de salida).
+
+   Si las dos dejan de coincidir — por ejemplo, una sucursal con `sucursales.region = 'JUAREZ'`
+   pero sin fila en `sucursal_region` — el tablero diría "esta sucursal sí tiene región"
+   mientras **todos sus pesos salen nulos**. Es el mismo cero silencioso que este módulo existe
+   para evitar, reintroducido por tener dos fuentes en vez de una. Por eso el aviso de "sin
+   región" del consolidado no confía en una sola señal: cruza `tiene_region = false` (del
+   catálogo) con las sucursales que aparecen en `v_consolidado_insumos_hueco` con causa "sin
+   región" (que sí depende de `sucursal_region`, vía `merma_costeada`). Así el aviso se dispara
+   venga el hueco de donde venga.
+
+   **Al conectar una sucursal hay que darla de alta en las dos tablas** (`sucursales` y
+   `sucursal_region`), nunca en una sola. Ver el flujo completo en `contexto/datos.md`,
+   "Conectar una sucursal nueva al consolidado".
+
 ## Puertos
 
 El tablero corre en **4000**, no en 3000. El 3000 lo ocupa otro proyecto en la misma PC.

@@ -43,6 +43,13 @@ Al personal se le pidió escribir en el comentario **el motivo y la fecha real**
 Los comentarios apenas empezaron a llenarse, así que el histórico tiene mucho
 "sin clasificar". El sistema ya está listo; faltan los datos.
 
+Las cuatro clases (caducidad / daño / cortesía / otro) más "sin clasificar" **deben sumar
+siempre el total de piezas del periodo** — ninguna pieza queda fuera de las cinco. El panel de
+clasificación del consolidado (`/dashboard?sucursal=__cadena__`) ya muestra las cinco; el panel
+de una sola sucursal sigue mostrando solo tres (caducidad / daño / sin clasificar), una
+decisión de diseño previa al consolidado: con una sola sucursal, cortesía y otro casi nunca
+tienen piezas.
+
 ---
 
 ## Ventas (aún no construido — estas reglas aplican cuando se construya)
