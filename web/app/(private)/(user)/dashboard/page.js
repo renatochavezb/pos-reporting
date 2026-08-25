@@ -6,6 +6,9 @@ import GraficaSemanal from "@/components/GraficaSemanal";
 import Barra from "@/components/Barra";
 import PestanasSucursal from "@/components/PestanasSucursal";
 import LineaCobertura from "@/components/consolidado/LineaCobertura";
+import AportePorSucursal from "@/components/consolidado/AportePorSucursal";
+import DesglosePorRegion from "@/components/consolidado/DesglosePorRegion";
+import BandaAvisos from "@/components/consolidado/BandaAvisos";
 import { pesos0, piezas, diaMes, fechaHora } from "@/libs/formato";
 import {
   CENTINELA,
@@ -14,6 +17,8 @@ import {
   datosSucursal,
   normalizarRanking,
   esAproximado,
+  construirAvisos,
+  limitesSemana,
 } from "@/libs/consolidado";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +49,6 @@ export default async function DashboardMerma({ searchParams }) {
   const histChart = [...(d.semanas || [])].reverse(); // cronológico (viejo → nuevo)
 
   // ── Semana en curso (lunes a domingo de hoy) ──
-  const fmtD = (dt) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
   const isoWeek = (fecha) => {
     const t = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
     const dd = (t.getUTCDay() + 6) % 7;
@@ -56,16 +59,14 @@ export default async function DashboardMerma({ searchParams }) {
     return 1 + Math.round((t - f) / (7 * 864e5));
   };
   const hoy = new Date();
-  const dow = (hoy.getDay() + 6) % 7; // 0 = lunes
-  const lunesAct = new Date(hoy); lunesAct.setDate(hoy.getDate() - dow);
-  const domAct = new Date(lunesAct); domAct.setDate(lunesAct.getDate() + 6);
-  const lunesPrev = new Date(lunesAct); lunesPrev.setDate(lunesAct.getDate() - 7);
-  const lunesActStr = fmtD(lunesAct);
-  const lunesPrevStr = fmtD(lunesPrev);
+  // Mismos límites de semana que usa `datosCadena` para acotar v_consolidado_aporte_semanal
+  // (hito 5): el periodo de Aporte por sucursal tiene que ser exactamente el del héroe, o el
+  // indicador de cuadre no da.
+  const { lunesActual: lunesActStr, domingoActual: domActStr, lunesPrevio: lunesPrevStr } = limitesSemana(hoy);
 
   const semActual =
     (d.semanas || []).find((s) => s.lunes === lunesActStr) ||
-    { semana: isoWeek(hoy), lunes: lunesActStr, domingo: fmtD(domAct), pesos: 0, piezas: 0, dias_con_captura: 0 };
+    { semana: isoWeek(hoy), lunes: lunesActStr, domingo: domActStr, pesos: 0, piezas: 0, dias_con_captura: 0 };
   const semPrev = (d.semanas || []).find((s) => s.lunes === lunesPrevStr);
   const deltaPct =
     semPrev && Number(semPrev.pesos) > 0
@@ -82,6 +83,21 @@ export default async function DashboardMerma({ searchParams }) {
         piezasSinValorizar: semActual.piezas_sin_valorizar,
       })
     : { aproximado: false, motivos: [] };
+
+  // Hito 5 — banda de avisos y Aporte por sucursal, solo en modo cadena. El periodo de Aporte
+  // es la misma semana en curso que el héroe (lunesActStr, calculado arriba con la misma
+  // función que usó `datosCadena`).
+  const avisos = esCadena
+    ? construirAvisos({
+        cobertura: d.cadena.cobertura,
+        regiones: d.cadena.regiones,
+        insumosHueco: d.cadena.insumosHueco,
+        costoSospechoso: d.cadena.costoSospechoso,
+      })
+    : [];
+  const aporteSemanaActual = esCadena
+    ? (d.cadena.aporte || []).filter((a) => a.lunes === lunesActStr)
+    : [];
 
   return (
     <div className="dn-brand flex min-h-screen">
@@ -114,6 +130,9 @@ export default async function DashboardMerma({ searchParams }) {
 
           {/* Pestañas de sucursal */}
           <PestanasSucursal sucursales={sucursales} mapaDisplay={mapaDisplay} actual={sucursal} />
+
+          {/* Avisos de conciliación (hito 5) — solo modo cadena */}
+          {esCadena && <BandaAvisos avisos={avisos} />}
 
           {/* Aviso: productos sin precio en la lista */}
           {sinPrecio.length > 0 && (
@@ -162,6 +181,19 @@ export default async function DashboardMerma({ searchParams }) {
               <p className="text-sm text-white/80 mt-2">{semPrev ? `${piezas(semPrev.piezas)} piezas` : "sin registro"}</p>
             </div>
           </div>
+
+          {/* Aporte por sucursal y desglose por región (hito 5) — solo modo cadena. Es la
+              prueba de conciliación hecha pantalla: el indicador de cuadre al pie de Aporte
+              compara centavos enteros contra el héroe de arriba. */}
+          {esCadena && (
+            <AportePorSucursal
+              cobertura={d.cadena.cobertura}
+              aporte={aporteSemanaActual}
+              heroPesos={semActual.pesos}
+              heroPiezas={semActual.piezas}
+            />
+          )}
+          {esCadena && <DesglosePorRegion regiones={d.cadena.regiones} />}
 
           {/* Clasificación por motivo */}
           <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] px-5 py-4">

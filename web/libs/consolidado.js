@@ -7,10 +7,27 @@
 // `merma`: todas leen vistas ya agregadas (`v_consolidado_*`), así que el costo de red no
 // crece con el número de sucursales.
 
-import { pesos0 } from "@/libs/formato";
+import { pesos0, piezas, fechaHora, regionTexto } from "@/libs/formato";
 
 // Valor del parámetro `?sucursal=` que activa la vista de toda la cadena.
 export const CENTINELA = "__cadena__";
+
+// Límites de la semana en curso (lunes a domingo), en formato YYYY-MM-DD. Los usa tanto
+// `datosCadena` (para acotar v_consolidado_aporte_semanal a como mucho 24 filas, F18) como
+// `dashboard/page.js` (para armar la fila "semana en curso" del héroe). Tienen que ser
+// EXACTAMENTE la misma semana o la tabla de Aporte deja de cuadrar contra el héroe (hito 5).
+export function limitesSemana(hoy = new Date()) {
+  const fmtD = (dt) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const dow = (hoy.getDay() + 6) % 7; // 0 = lunes
+  const lunesAct = new Date(hoy);
+  lunesAct.setDate(hoy.getDate() - dow);
+  const domAct = new Date(lunesAct);
+  domAct.setDate(lunesAct.getDate() + 6);
+  const lunesPrev = new Date(lunesAct);
+  lunesPrev.setDate(lunesAct.getDate() - 7);
+  return { lunesActual: fmtD(lunesAct), domingoActual: fmtD(domAct), lunesPrevio: fmtD(lunesPrev) };
+}
 
 // Resuelve el parámetro de la URL contra la lista de sucursales con datos.
 // - El centinela siempre se reconoce, exista o no una sucursal con ese nombre.
@@ -48,10 +65,16 @@ export async function datosSucursal(sb, sucursal) {
   };
 }
 
-// Datos de toda la cadena. Siete consultas fijas en un solo Promise.all, ninguna sobre
+// Datos de toda la cadena. Diez consultas fijas en un solo Promise.all, ninguna sobre
 // `merma`: todas sobre vistas `v_consolidado_*` ya agregadas, o sobre los catálogos chicos
 // (`sucursales`/`configuracion`). El número de consultas no cambia si hay 2 sucursales o 12.
+// La de aporte se acota con `.in("lunes", [lunesActual, lunesPrevio])`: máximo 24 filas.
+// No se agrega una consulta aparte a `v_consolidado_regiones_espejo`: el monto y porcentaje
+// del aviso de costos provisionales (hito 5) se calculan a partir de `v_consolidado_por_region`,
+// que ya trae `costos_provisionales` resuelto por esa vista -- una consulta menos, mismo dato.
 export async function datosCadena(sb) {
+  const { lunesActual, lunesPrevio } = limitesSemana();
+
   const [
     { data: diaria },
     { data: productos },
@@ -60,6 +83,9 @@ export async function datosCadena(sb) {
     { data: cobertura },
     { data: regiones },
     { data: configPadron },
+    { data: aporte },
+    { data: insumosHueco },
+    { data: costoSospechoso },
   ] = await Promise.all([
     sb.from("v_consolidado_diaria").select("*").order("fecha", { ascending: false }).limit(12),
     sb
@@ -72,6 +98,9 @@ export async function datosCadena(sb) {
     sb.from("v_consolidado_cobertura").select("*"),
     sb.from("v_consolidado_por_region").select("*"),
     sb.from("configuracion").select("valor").eq("clave", "sucursales_en_padron").maybeSingle(),
+    sb.from("v_consolidado_aporte_semanal").select("*").in("lunes", [lunesActual, lunesPrevio]),
+    sb.from("v_consolidado_insumos_hueco").select("*"),
+    sb.from("v_consolidado_costo_sospechoso").select("*"),
   ]);
 
   const filasCobertura = cobertura || [];
@@ -94,7 +123,16 @@ export async function datosCadena(sb) {
     semanas: semanas || [],
     sync: null,
     tipos: tipos || [],
-    cadena: { m, cobertura: filasCobertura, regiones: regiones || [] },
+    cadena: {
+      m,
+      cobertura: filasCobertura,
+      regiones: regiones || [],
+      aporte: aporte || [],
+      insumosHueco: insumosHueco || [],
+      costoSospechoso: costoSospechoso || [],
+      lunesActual,
+      lunesPrevio,
+    },
   };
 }
 
@@ -152,4 +190,105 @@ export function esAproximado({ n, m, cobertura, regiones, piezasSinValorizar }) 
   }
 
   return { aproximado: motivos.length > 0, motivos };
+}
+
+// Hito 5 (F10/F11/D11) — arma la banda de avisos del consolidado, en orden de gravedad:
+// error > advertencia > acción > informativo. Cada aviso desaparece SOLO cuando su causa se
+// resuelve en los datos reales; ninguno se cablea a un nombre de sucursal ni a un monto fijo.
+//
+// Nota de diseño (caso Juárez 3, ver contexto/decisiones.md): "sin región" se detecta con DOS
+// fuentes, unidas, porque hay dos formas distintas de quedar sin región:
+//  (a) el catálogo `sucursales.region` nunca se llenó (cobertura.tiene_region = false), y
+//  (b) la fila operativa de `sucursal_region` falta o se borró, lo que deja
+//      `merma_costeada.region` en null aunque el catálogo esté bien -- esto es lo que
+//      `v_consolidado_insumos_hueco` reporta con causa 'sin región'.
+// Si este aviso solo mirara el catálogo, la prueba reversible del hito 5 (borrar la fila de
+// `sucursal_region` de Juárez 3) no lo dispararía, porque esa prueba no toca `sucursales`.
+export function construirAvisos({ cobertura, regiones, insumosHueco, costoSospechoso }) {
+  const filasCobertura = cobertura || [];
+  const filasRegion = regiones || [];
+  const filasHueco = insumosHueco || [];
+  const filasSospechoso = costoSospechoso || [];
+  const avisos = [];
+
+  const relevantes = filasCobertura.filter((r) => r.en_padron || r.con_datos);
+  const mapaDisplay = new Map(filasCobertura.map((r) => [r.sucursal, r.nombre_display]));
+
+  // 1 — sucursales sin región (error): sin ella no se valorizan y quedan fuera del total en
+  // pesos. Unión de las dos causas descritas arriba, deduplicada por sucursal canónica.
+  const sinRegion = new Set();
+  filasHueco
+    .filter((h) => h.causa === "sin región")
+    .forEach((h) => (h.sucursales || []).forEach((s) => sinRegion.add(s)));
+  relevantes.filter((r) => !r.tiene_region).forEach((r) => sinRegion.add(r.sucursal));
+  if (sinRegion.size > 0) {
+    const nombres = [...sinRegion].map((s) => mapaDisplay.get(s) || s).join(", ");
+    avisos.push({
+      tipo: "error",
+      texto: `${sinRegion.size} sucursal(es) sin región asignada: no se valorizan y no están en el total en pesos (${nombres}).`,
+    });
+  }
+
+  // 2 — sync en error o sin corrida reciente (error), nombrando desde cuándo.
+  const conProblemaSync = relevantes.filter((r) => r.estatus_sync === "error" || r.sin_corrida_reciente);
+  if (conProblemaSync.length > 0) {
+    const detalle = conProblemaSync
+      .map((r) => `${r.nombre_display} (desde ${fechaHora(r.ultima_corrida)})`)
+      .join(", ");
+    avisos.push({
+      tipo: "error",
+      texto: `${conProblemaSync.length} sucursal(es) con sincronización en error o sin corrida reciente: ${detalle}.`,
+    });
+  }
+
+  // 3 — costos de la región provisional (advertencia): monto y % calculados de verdad, sale
+  // de cruzar v_consolidado_por_region (ya trae `costos_provisionales` resuelto por el espejo
+  // de `precios` y la atribución de `regiones.es_referencia`).
+  const totalPesosRegiones = filasRegion.reduce((acc, r) => acc + Number(r.pesos || 0), 0);
+  const provisional = filasRegion.find((r) => r.costos_provisionales);
+  if (provisional && totalPesosRegiones > 0) {
+    const monto = Number(provisional.pesos || 0);
+    const pct = (monto / totalPesosRegiones) * 100;
+    const referencia = filasRegion.find((r) => r.region != null && r.region !== provisional.region);
+    avisos.push({
+      tipo: "advertencia",
+      texto:
+        `Los costos de ${regionTexto(provisional.region)} son provisionales` +
+        (referencia ? ` (heredados de ${regionTexto(referencia.region)})` : "") +
+        `. ${pesos0(monto)} de este total (${pct.toFixed(1)}%) corresponde a sucursales de ` +
+        `${regionTexto(provisional.region)} y está sobrevaluado.`,
+    });
+  }
+
+  // 4 y 5 — insumos sin equivalencia / sin precio en su región (acción). Separados: la acción
+  // correctiva es distinta en cada caso, aunque las dos apunten a /precios.
+  const sinEquivalencia = filasHueco.filter((h) => h.causa === "sin equivalencia");
+  if (sinEquivalencia.length > 0) {
+    const piezasTot = sinEquivalencia.reduce((acc, h) => acc + Number(h.piezas || 0), 0);
+    avisos.push({
+      tipo: "accion",
+      texto: `${sinEquivalencia.length} insumo(s) sin equivalencia registrada (${piezas(piezasTot)} piezas sin valorizar): ${sinEquivalencia.map((h) => h.insumo).join(", ")}.`,
+      href: "/precios",
+    });
+  }
+  const sinPrecioRegion = filasHueco.filter((h) => h.causa === "sin precio en su región");
+  if (sinPrecioRegion.length > 0) {
+    const piezasTot = sinPrecioRegion.reduce((acc, h) => acc + Number(h.piezas || 0), 0);
+    avisos.push({
+      tipo: "accion",
+      texto: `${sinPrecioRegion.length} insumo(s) sin precio cargado en su región (${piezas(piezasTot)} piezas sin valorizar): ${sinPrecioRegion.map((h) => h.insumo).join(", ")}.`,
+      href: "/precios",
+    });
+  }
+
+  // 6 — costos sospechosos (informativo): costo_confiable = false.
+  if (filasSospechoso.length > 0) {
+    const piezasTot = filasSospechoso.reduce((acc, h) => acc + Number(h.piezas || 0), 0);
+    avisos.push({
+      tipo: "informativo",
+      texto: `${filasSospechoso.length} insumo(s) con costo marcado como sospechoso (${piezas(piezasTot)} piezas): ${filasSospechoso.map((h) => h.insumo).join(", ")}.`,
+    });
+  }
+
+  return avisos;
 }

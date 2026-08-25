@@ -33,3 +33,10 @@ export const fechaHora = (iso) =>
         minute: "2-digit",
         hour12: true,
       }).format(new Date(iso));
+
+// Nombre de región para mostrar. Las regiones son un catálogo chico y estable (a diferencia
+// de las sucursales, que van a crecer a 12), así que aquí basta un mapa fijo -- mismo patrón
+// que ya usa web/app/(private)/(user)/precios/page.js para sus encabezados "Chihuahua"/
+// "Juárez". Si se agrega una región nueva, cae al texto crudo en vez de romperse.
+export const regionTexto = (region) =>
+  region === "CHIHUAHUA" ? "Chihuahua" : region === "JUAREZ" ? "Juárez" : region == null ? "Sin región" : region;
