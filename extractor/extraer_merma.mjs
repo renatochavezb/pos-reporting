@@ -29,7 +29,14 @@ const consulta = readFileSync(join(__dirname, '..', 'sql', 'extraccion_merma.sql
 async function leer(b, desde) {
   const cfg = {
     server: b.host, port: b.port || 1433, user: b.user, password: b.pass, database: b.db,
-    options: { encrypt: false, trustServerCertificate: true, useUTC: false },
+    options: {
+      encrypt: false, trustServerCertificate: true, useUTC: false,
+      /* COMPATIBILIDAD SEATTLEPOS (SQL Server 2008 R2): el POS solo habla TLS 1.0 con
+         cifrados viejos y Node 24 ya no. Sin esto, ECONNRESET en todas las sucursales.
+         Aplica SOLO a la conexion al POS: solo lectura, dentro de la VPN de Hamachi.
+         Pendiente de fondo: actualizar los SQL Server de las sucursales. */
+      cryptoCredentialsDetails: { minVersion: 'TLSv1', ciphers: 'DEFAULT@SECLEVEL=0' },
+    },
     connectionTimeout: 30000, requestTimeout: 120000,
   };
   const pool = await sql.connect(cfg);
