@@ -2,11 +2,9 @@ import { createClient } from "@/libs/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import ButtonAccount from "@/components/ButtonAccount";
 import SubirPrecios from "@/components/SubirPrecios";
+import TablaPrecios from "@/components/TablaPrecios";
 
 export const dynamic = "force-dynamic";
-
-const pesos = (n) =>
-  n == null ? "—" : new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
 
 export default async function PreciosPage() {
   const supabase = await createClient();
@@ -15,18 +13,24 @@ export default async function PreciosPage() {
     supabase.from("precios_cargas").select("*").order("cargado_en", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
-  // pivot: (producto, tamaño) -> { chihuahua, juarez }
+  // pivot: (producto, tamaño) -> { CHIHUAHUA:{costo,publico}, JUAREZ:{costo,publico} }
   const mapa = new Map();
   (precios || []).forEach((p) => {
     const k = `${p.producto_norm}|${p.tamano}`;
-    if (!mapa.has(k)) mapa.set(k, { producto: p.producto, tamano: p.tamano, CHIHUAHUA: null, JUAREZ: null });
-    mapa.get(k)[p.region] = p.costo;
+    if (!mapa.has(k))
+      mapa.set(k, { producto: p.producto, tamano: p.tamano, CHIHUAHUA: { costo: null, publico: null }, JUAREZ: { costo: null, publico: null } });
+    mapa.get(k)[p.region] = { costo: p.costo, publico: p.precio_venta };
   });
   const filas = [...mapa.values()].sort((a, b) =>
     a.producto === b.producto ? (a.tamano < b.tamano ? 1 : -1) : a.producto < b.producto ? -1 : 1
   );
-  const nCh = (precios || []).filter((p) => p.region === "CHIHUAHUA").length;
-  const nJz = (precios || []).filter((p) => p.region === "JUAREZ").length;
+  const resumen = {
+    nCh: (precios || []).filter((p) => p.region === "CHIHUAHUA").length,
+    nJz: (precios || []).filter((p) => p.region === "JUAREZ").length,
+    chPub: (precios || []).filter((p) => p.region === "CHIHUAHUA" && p.precio_venta > 0).length,
+    jzPub: (precios || []).filter((p) => p.region === "JUAREZ" && p.precio_venta > 0).length,
+  };
+  const { nCh, nJz } = resumen;
 
   return (
     <div className="dn-brand flex min-h-screen">
@@ -49,40 +53,8 @@ export default async function PreciosPage() {
           {/* Cargar lista */}
           <SubirPrecios ultimaCarga={ultimaCarga} />
 
-          {/* Tabla de precios por región */}
-          <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] overflow-hidden">
-            <div className="px-5 pt-5 pb-3">
-              <p className="eyebrow">Costos por región</p>
-            </div>
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-              <table className="w-full text-left">
-                <thead className="bg-[var(--surface-container-low)] sticky top-0">
-                  <tr className="font-label text-[11px] uppercase tracking-wider text-[var(--on-surface-variant)]">
-                    <th className="px-4 py-3 font-medium">Producto</th>
-                    <th className="px-4 py-3 font-medium">Tamaño</th>
-                    <th className="px-4 py-3 font-medium text-right">Chihuahua</th>
-                    <th className="px-4 py-3 font-medium text-right">Juárez</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm text-[var(--on-surface)]">
-                  {filas.map((f, i) => {
-                    const iguales = f.CHIHUAHUA != null && f.CHIHUAHUA === f.JUAREZ;
-                    return (
-                      <tr key={i} className="border-t border-[var(--outline-variant)]/60 hover:bg-[var(--surface-container-low)]/50">
-                        <td className="px-4 py-2.5">{f.producto}</td>
-                        <td className="px-4 py-2.5 text-[var(--on-surface-variant)]">{f.tamano === "GD" ? "Grande" : "Chico"}</td>
-                        <td className="px-4 py-2.5 text-right tnum">{pesos(f.CHIHUAHUA)}</td>
-                        <td className={`px-4 py-2.5 text-right tnum ${iguales ? "text-[var(--muted-soft)]" : ""}`}>{pesos(f.JUAREZ)}</td>
-                      </tr>
-                    );
-                  })}
-                  {filas.length === 0 && (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-[var(--on-surface-variant)]">Aún no hay precios cargados</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Tabla de precios por región (Costos / Precio público) */}
+          <TablaPrecios filas={filas} resumen={resumen} />
           <div className="h-4" />
         </div>
       </main>

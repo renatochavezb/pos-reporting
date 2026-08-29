@@ -36,6 +36,11 @@ async function leer(b, desde) {
          Aplica SOLO a la conexion al POS: solo lectura, dentro de la VPN de Hamachi.
          Pendiente de fondo: actualizar los SQL Server de las sucursales. */
       cryptoCredentialsDetails: { minVersion: 'TLSv1', ciphers: 'DEFAULT@SECLEVEL=0' },
+      /* ENLACES INESTABLES (ej. Fuentes Mares por Hamachi): con el paquete TDS
+         por defecto (4096) la transferencia se fragmenta y se cae con ECONNRESET
+         a mitad de lectura. En paquetes chicos pasa sin problema. Cuesta unos
+         ms mas en sucursales sanas, pero es despreciable para este volumen. */
+      packetSize: 512,
     },
     connectionTimeout: 30000, requestTimeout: 120000,
   };
@@ -64,7 +69,10 @@ const PISO = '2026-07-01';
    siguiente cubre el hueco sola, sin intervencion. */
 async function ventanaDe(cliente, b, override) {
   if (override) return { desde: override, modo: 'manual' };
-  const suc = b.sucursal || b.alias;
+  // Los datos se guardan bajo el nombre real (b.nombre) cuando la sucursal se
+  // renombra (ej. POS "JUAREZ 3" -> guardada como "MISIONES"). El marcador
+  // incremental debe buscar por ese mismo nombre, o siempre haria backfill.
+  const suc = b.nombre || b.sucursal || b.alias;
   const r = await cliente.query(
     'select max(fecha)::text as ultima from merma where sucursal = $1', [suc]);
   const ultima = r.rows[0]?.ultima;
@@ -109,7 +117,7 @@ async function upsert(cliente, filas) {
     }
     const filtro = (args.filter((a) => !a.startsWith('--') && a !== override)[0] || "").trim().toUpperCase();
     const lista = filtro
-      ? sucursales.filter((b) => (b.sucursal || "").toUpperCase() === filtro || (b.alias || "").toUpperCase() === filtro)
+      ? sucursales.filter((b) => (b.sucursal || "").toUpperCase() === filtro || (b.alias || "").toUpperCase() === filtro || (b.nombre || "").toUpperCase() === filtro)
       : sucursales;
     if (filtro && lista.length === 0) console.log(`(ninguna sucursal coincide con "${filtro}")`);
     for (const b of lista) {
@@ -131,6 +139,11 @@ async function upsert(cliente, filas) {
             console.log(`  (descartadas ${antes - filas.length} filas de otra sucursal)`);
           }
         }
+        // RENOMBRE OPCIONAL: el POS graba un nombre (ej. "JUAREZ 2") pero la
+        // sucursal real es otra (ej. "VALLE"). El blindaje filtra por el nombre
+        // del POS (b.sucursal) y aqui se reescribe al nombre real (b.nombre)
+        // para guardarlo y mostrarlo asi en todo el sistema.
+        if (b.nombre) filas.forEach((f) => { f.sucursal = b.nombre; });
         console.log(`  ${filas.length} movimientos de merma`);
         filas.forEach((f) => {
           f.insumo_norm = norm(f.insumo);

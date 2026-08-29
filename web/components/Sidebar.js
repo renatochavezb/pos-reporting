@@ -4,7 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const GRUPOS = [
-  { titulo: "Gerencia", items: [{ icon: "◆", label: "Dashboard", href: "/dashboard" }] },
+  { titulo: "Gerencia", items: [
+    { icon: "◆", label: "Dashboard", href: "/dashboard" },
+    { icon: "✳", label: "Misiones NVO", href: "/misiones-nvo" },
+    { icon: "✳", label: "Fuentes Mares NVO", href: "/fuentes-mares-nvo" },
+  ] },
   { titulo: "Datos", items: [{ icon: "≡", label: "Ventas" }] },
   { titulo: "Administración", items: [
     { icon: "✦", label: "Precios", href: "/precios" },

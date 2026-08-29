@@ -15,25 +15,32 @@ const REGIONES = [
   { k: "JUAREZ", txt: "Juárez" },
 ];
 
+const TIPOS = [
+  { k: "costos", txt: "Costos" },
+  { k: "publico", txt: "Precio público" },
+];
+
 export default function SubirPrecios({ ultimaCarga }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const [cargando, setCargando] = useState(false);
   const [region, setRegion] = useState("AMBAS");
+  const [tipo, setTipo] = useState("costos");
 
   const alElegir = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCargando(true);
-    const t = toast.loading(`Subiendo lista (${region.toLowerCase()})…`);
+    const t = toast.loading(`Subiendo lista de ${tipo === "publico" ? "precio público" : "costos"} (${region.toLowerCase()})…`);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("region", region);
+      fd.append("tipo", tipo);
       const r = await fetch("/api/precios/upload", { method: "POST", body: fd });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Error al subir");
-      toast.success(`Lista actualizada: ${data.filas} precios`, { id: t });
+      toast.success(`Lista de ${tipo === "publico" ? "precio público" : "costos"} actualizada: ${data.filas} precios`, { id: t });
       router.refresh();
     } catch (err) {
       toast.error(err.message, { id: t });
@@ -51,6 +58,23 @@ export default function SubirPrecios({ ultimaCarga }) {
       <p className="text-sm text-[var(--on-surface-variant)] mb-5">
         {fecha ? <>Última carga: <span className="text-[var(--on-surface)]">{fecha}</span> · {ultimaCarga?.filas} precios</> : "Aún no cargas ninguna lista"}
       </p>
+
+      <p className="text-xs text-[var(--on-surface-variant)] mb-2">¿Qué lista es este archivo?</p>
+      <div className="flex gap-2 mb-4">
+        {TIPOS.map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTipo(t.k)}
+            className={`px-4 py-1.5 rounded-full font-label text-[12px] transition-colors ${
+              tipo === t.k
+                ? "bg-[var(--primary)] text-[var(--on-primary)]"
+                : "text-[var(--on-surface-variant)] border border-[var(--outline-variant)] hover:bg-[var(--surface-container-low)]"
+            }`}
+          >
+            {t.txt}
+          </button>
+        ))}
+      </div>
 
       <p className="text-xs text-[var(--on-surface-variant)] mb-2">¿Para qué región es este archivo?</p>
       <div className="flex gap-2 mb-5">
@@ -85,11 +109,12 @@ export default function SubirPrecios({ ultimaCarga }) {
             <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 7.5 12 3m0 0L7.5 7.5M12 3v12" />
           </svg>
         )}
-        {cargando ? "Subiendo…" : `Subir lista${region !== "AMBAS" ? " · " + (region === "JUAREZ" ? "Juárez" : "Chihuahua") : ""}`}
+        {cargando ? "Subiendo…" : `Subir ${tipo === "publico" ? "precio público" : "costos"}${region !== "AMBAS" ? " · " + (region === "JUAREZ" ? "Juárez" : "Chihuahua") : ""}`}
       </button>
 
       <p className="text-xs text-[var(--on-surface-variant)] mt-4">
-        <b>Ambas</b>: archivo con las 2 columnas (Chihuahua y Juárez). <b>Chihuahua</b> o <b>Juárez</b>: reemplaza solo esa región.
+        <b>Costos</b> y <b>Precio público</b> son dos listas independientes: subir una <b>no borra</b> la otra.
+        <br /><b>Ambas</b>: archivo con las 2 columnas (Chihuahua y Juárez). <b>Chihuahua</b> o <b>Juárez</b>: solo esa región.
       </p>
     </div>
   );
