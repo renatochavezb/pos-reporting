@@ -89,6 +89,7 @@ export default function MermaNvo({ rows }) {
 
   const keys = Object.keys(weeks).sort();
   const [sel, setSel] = useState(curMon);
+  const [openDay, setOpenDay] = useState(null);
   const selKey = weeks[sel] ? sel : keys[keys.length - 1];
   const w = selKey ? weeks[selKey] : null;
 
@@ -166,10 +167,11 @@ export default function MermaNvo({ rows }) {
               return (
                 <div
                   key={i}
+                  onClick={() => !vacio && setOpenDay({ dia: DIAS[i], fecha, items })}
                   className={`rounded-2xl border p-3 flex flex-col min-h-[120px] ${
                     vacio
                       ? "border-dashed border-[var(--outline-variant)] bg-transparent"
-                      : "border-[var(--outline-variant)] bg-[var(--surface-container-lowest)]"
+                      : "border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] cursor-pointer hover:border-[var(--primary)] transition-colors"
                   }`}
                 >
                   <div className="flex items-baseline justify-between mb-2">
@@ -222,6 +224,54 @@ export default function MermaNvo({ rows }) {
             })}
           </div>
         </>
+      )}
+
+      {/* Detalle del día (nombres y costos completos) */}
+      {openDay && (
+        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={() => setOpenDay(null)}>
+          <div
+            className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] w-full max-w-md max-h-[85vh] overflow-y-auto ambient-shadow-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--outline-variant)] sticky top-0 bg-[var(--surface-container-lowest)]">
+              <div>
+                <p className="font-label text-[11px] tracking-wide text-[var(--on-surface-variant)]">{openDay.dia}</p>
+                <p className="font-headline text-xl text-[var(--on-surface)]">{etiqueta(openDay.fecha)}</p>
+              </div>
+              <button
+                onClick={() => setOpenDay(null)}
+                className="w-8 h-8 rounded-full hover:bg-[var(--surface-container-low)] grid place-items-center text-[var(--on-surface-variant)]"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="flex flex-col">
+              {openDay.items.map((it, j) => (
+                <li key={j} className="flex items-center gap-3 px-5 py-3 border-t border-[var(--outline-variant)]/60 first:border-t-0">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: MOT[it.b].color }} title={MOT[it.b].lab} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[var(--on-surface)]">{it.cant > 1 && <b>{it.cant}× </b>}{it.insumo}</p>
+                    <p className="text-[11px]" style={{ color: MOT[it.b].color }}>{MOT[it.b].lab}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="tnum text-sm font-semibold">{peso0(it.costo)}</p>
+                    {it.publico > 0 && <p className="tnum text-[11px] text-[var(--on-surface-variant)]">púb {peso0(it.publico)}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="px-5 py-4 border-t border-[var(--outline-variant)] flex items-center justify-between sticky bottom-0 bg-[var(--surface-container-lowest)]">
+              <span className="text-sm font-semibold">Total del día</span>
+              <div className="text-right">
+                <p className="tnum text-lg font-semibold">{peso0(openDay.items.reduce((a, x) => a + x.costo, 0))}</p>
+                {openDay.items.some((x) => x.publico > 0) && (
+                  <p className="tnum text-[11px] text-[var(--on-surface-variant)]">público {peso0(openDay.items.reduce((a, x) => a + x.publico, 0))}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -5,24 +5,14 @@ import BotonActualizar from "@/components/BotonActualizar";
 import MermaNvo from "@/components/MermaNvo";
 import BitacoraUpload from "@/components/BitacoraUpload";
 import GraficaSemanal from "@/components/GraficaSemanal";
+import TopProductos from "@/components/TopProductos";
 
 export const dynamic = "force-dynamic";
-
-const pesos0 = (n) =>
-  n == null ? "—" : new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n);
-
-function Barra({ pct }) {
-  return (
-    <div className="h-1.5 rounded-full bg-[var(--bar-track)] w-full overflow-hidden">
-      <div className="h-full rounded-full bg-[var(--bar-fill)]" style={{ width: `${Math.max(2, pct)}%` }} />
-    </div>
-  );
-}
 
 export default async function FuentesMaresNvoPage() {
   const supabase = await createClient();
 
-  const [{ data: rows }, { data: bitacora }, { data: semanas }, { data: productos }] = await Promise.all([
+  const [{ data: rows }, { data: bitacora }, { data: semanas }] = await Promise.all([
     supabase
       .from("merma_costeada")
       .select("fecha,insumo,cantidad,motivo_tipo,costo_unit,precio_publico,importe_costo")
@@ -37,16 +27,9 @@ export default async function FuentesMaresNvoPage() {
       .eq("sucursal", "FUENTES MARES")
       .order("lunes", { ascending: false })
       .limit(16),
-    supabase
-      .from("v_merma_por_producto")
-      .select("*")
-      .eq("sucursal", "FUENTES MARES")
-      .order("pesos", { ascending: false, nullsFirst: false })
-      .limit(8),
   ]);
 
   const histChart = [...(semanas || [])].reverse(); // cronológico (viejo → nuevo)
-  const maxProd = Math.max(1, ...(productos || []).map((p) => Number(p.pesos || 0)));
 
   return (
     <div className="dn-brand flex min-h-screen">
@@ -123,32 +106,9 @@ export default async function FuentesMaresNvoPage() {
             <GraficaSemanal data={histChart} />
           </section>
 
-          {/* ── Productos con más merma ── */}
-          <section className="flex flex-col gap-4 border-t border-[var(--outline-variant)] pt-8">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-4 rounded-full bg-[var(--primary)]" />
-              <h2 className="font-headline text-2xl text-[var(--on-surface)]">Productos con más merma</h2>
-            </div>
-            <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] overflow-hidden">
-              {(productos || []).length === 0 ? (
-                <p className="px-5 py-6 text-sm text-[var(--on-surface-variant)]">Sin datos</p>
-              ) : (
-                (productos || []).map((p, i) => {
-                  const pct = p.tiene_costo ? (Number(p.pesos || 0) / maxProd) * 100 : 0;
-                  return (
-                    <div key={p.no_insumo} className="flex items-center gap-4 px-5 py-3 border-t border-[var(--outline-variant)]/70 first:border-t-0">
-                      <span className="w-4 text-[var(--muted-soft)] font-label text-sm">{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold truncate ${!p.tiene_costo ? "text-[var(--error)]" : "text-[var(--on-surface)]"}`}>{p.insumo}</p>
-                        <p className="text-xs text-[var(--primary)] mt-0.5">{p.piezas} pz · costo {p.costo_unit != null ? pesos0(p.costo_unit) : "—"}</p>
-                      </div>
-                      <div className="w-24 hidden sm:block"><Barra pct={pct} /></div>
-                      <span className="w-20 text-right font-headline text-lg tnum">{p.tiene_costo ? pesos0(p.pesos) : "s/p"}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+          {/* ── Productos: mermados (caducidad) y dañados (daño), con selector de periodo ── */}
+          <section className="border-t border-[var(--outline-variant)] pt-8">
+            <TopProductos rows={rows || []} />
           </section>
 
           <p className="text-xs text-[var(--on-surface-variant)] border-t border-[var(--outline-variant)] pt-4">
