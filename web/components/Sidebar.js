@@ -6,8 +6,7 @@ import { usePathname } from "next/navigation";
 const GRUPOS = [
   { titulo: "Gerencia", items: [
     { icon: "◆", label: "Dashboard", href: "/dashboard" },
-    { icon: "✳", label: "Misiones NVO", href: "/misiones-nvo" },
-    { icon: "✳", label: "Fuentes Mares NVO", href: "/fuentes-mares-nvo" },
+    { icon: "✳", label: "Merma NVO", href: "/nvo/FUENTES%20MARES" },
   ] },
   { titulo: "Datos", items: [{ icon: "≡", label: "Ventas" }] },
   { titulo: "Administración", items: [
@@ -32,7 +31,7 @@ export default function Sidebar() {
               <p className="eyebrow mb-2 px-1">{g.titulo}</p>
               <ul className="flex flex-col gap-0.5">
                 {g.items.map((n) => {
-                  const activo = n.href && path === n.href;
+                  const activo = n.href && (path === n.href || (n.href.startsWith("/nvo") && path.startsWith("/nvo")));
                   const cls = `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                     activo ? "bg-[var(--primary-container)] text-[var(--on-primary-container)] font-semibold"
                     : n.href ? "text-[var(--on-surface-variant)] hover:bg-[var(--surface-container-low)]"
