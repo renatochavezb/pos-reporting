@@ -12,7 +12,7 @@ const GRUPOS = [
   { titulo: "Administración", items: [
     { icon: "✦", label: "Precios", href: "/precios" },
     { icon: "⌂", label: "Sucursales" },
-    { icon: "⚙", label: "Ajustes" },
+    { icon: "⚙", label: "Ajustes", href: "/ajustes" },
   ]},
 ];
 

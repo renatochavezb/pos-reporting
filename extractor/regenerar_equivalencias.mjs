@@ -8,7 +8,7 @@ const norm = (s)=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/
 // emparejador automatico no atrapa. Clave = norm(insumo) -> [producto_norm, tamano].
 // Se revisa PRIMERO en resolver(); asi quedan permanentes aunque se regenere.
 const MANUAL = {
-  'BLUBERRY 3L CH':       ['BLUEBERRY', 'CH'],
+  'BLUBERRY 3L CH':       ['BLUEBERRY 3L', 'CH'],   // tres leches (no el cheesecake)
   'CAJA MACARRON 10 PZ':  ['CAJA MACARRONS', 'GD'],
   'FRESAS G':             ['FRESAS CON CREMA', 'GD'],
   'ICE NAPOLITANO':       ['PASTEL HELEADO NAPOLITANO', 'GD'],
@@ -22,7 +22,7 @@ const MANUAL = {
   //   CHEES OREO  -> no hay cheesecake oreo entero de Juarez en la lista.
   //   PASTEL REESES -> producto descontinuado, ya no existe.
 };
-const SIZE=[' GDE',' GRANDE',' GRA',' CHICO',' CHICA',' CH',' INDIVIDUAL',' IND',' MINI',' 3L'];
+const SIZE=[' GDE',' GRANDE',' GRA',' CHICO',' CHICA',' CH',' INDIVIDUAL',' IND',' MINI'];
 function parte(n){ let x=' '+norm(n)+' '; let size=null;
   if(/ (GDE|GRANDE|GRA) /.test(x)) size='GD'; else if(/ (CHICO|CHICA|CH) /.test(x)) size='CH';
   for(const s of SIZE) x=x.split(s+' ').join(' '); return {base:x.trim(), size}; }
@@ -41,7 +41,8 @@ function repl(b){
   if(b==='CUMPLEANOS') b='MINI CUMPLEANOS';
   if(b==='CHEESECAKE ROLES LOTUS'||b==='CHEESECAKE ROLES LOT') b='CHEESECAKE ROL DE CANELA LOT';
   if(b==='RED VELVET') b='REDVELVET';
-  if(b==='BLUE'||b==='BLUEBERRY 3L'||b==='BLUE BERRY') b='BLUEBERRY';
+  b=b.replace(/\bBLUBERRY\b/g,'BLUEBERRY'); // error de dedo (falta E), NO toca "BLUEBERRY 3L"
+  if(b==='BLUE'||b==='BLUE BERRY') b='BLUEBERRY'; // solo el cheesecake suelto; "BLUEBERRY 3L" (tres leches) se queda aparte
   return b.replace(/\s+/g,' ').trim();
 }
 const precios=(await c.query("select distinct producto_norm, tamano from precios")).rows;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 // Reduce la imagen a máx 1600px y la vuelve JPEG para que quepa en el navegador.
 function downscale(file, maxDim = 1600) {
@@ -31,10 +33,34 @@ function downscale(file, maxDim = 1600) {
 }
 
 export default function BitacoraUpload({ sucursal }) {
+  const router = useRouter();
   const key = `bitacora:${sucursal}`;
   const [imgs, setImgs] = useState([]);
   const [zoom, setZoom] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+
+  const procesar = async () => {
+    if (!imgs.length || procesando) return;
+    setProcesando(true);
+    const t = toast.loading("Procesando bitácora con IA…");
+    try {
+      const r = await fetch("/api/bitacora/procesar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sucursal, imagenes: imgs.map((x) => x.url) }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Error al procesar");
+      const monto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(data.totCosto || 0);
+      toast.success(`Bitácora cargada: ${data.renglones} renglones · ${monto}${data.sinCosto ? ` (${data.sinCosto} sin costo)` : ""}`, { id: t, duration: 6000 });
+      router.refresh();
+    } catch (e) {
+      toast.error(e.message, { id: t, duration: 7000 });
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -85,8 +111,27 @@ export default function BitacoraUpload({ sucursal }) {
           <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
         </label>
         {imgs.length > 0 && (
+          <button
+            onClick={procesar}
+            disabled={procesando || cargando}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60"
+          >
+            {procesando ? (
+              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 animate-spin">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                <path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15l-2.6.9L18 18.5l-.9-2.6L14.5 15l2.6-.9L18 12zM6 14l.9 2.5L9.5 17l-2.6.9L6 20.5l-.9-2.6L2.5 17l2.6-.9L6 14z" />
+              </svg>
+            )}
+            {procesando ? "Procesando…" : "Procesar bitácora"}
+          </button>
+        )}
+        {imgs.length > 0 && (
           <span className="text-xs text-[var(--on-surface-variant)]">
-            {imgs.length} {imgs.length === 1 ? "foto" : "fotos"} guardada{imgs.length === 1 ? "" : "s"} en este navegador
+            {imgs.length} {imgs.length === 1 ? "foto" : "fotos"}
           </span>
         )}
       </div>
