@@ -1,6 +1,7 @@
 import { createClient } from "@/libs/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import ButtonAccount from "@/components/ButtonAccount";
+import Autorizaciones from "@/components/Autorizaciones";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +38,12 @@ export default async function AjustesPage() {
             <ButtonAccount />
           </div>
 
-          {/* Uso de IA */}
+          {/* Costos de uso */}
           <section className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-4 rounded-full bg-[var(--primary)]" />
-              <h2 className="font-headline text-2xl text-[var(--on-surface)]">Uso de IA</h2>
-              <span className="ml-2 text-xs text-[var(--on-surface-variant)]">procesamiento de bitácoras</span>
+              <h2 className="font-headline text-2xl text-[var(--on-surface)]">Costos de uso</h2>
+              <span className="ml-2 text-xs text-[var(--on-surface-variant)]">IA · procesamiento de bitácoras</span>
             </div>
 
             {/* KPIs */}
@@ -106,6 +107,11 @@ export default async function AjustesPage() {
               Costos en USD (así cobra la API). El equivalente en pesos es <b>aproximado</b> (≈ ${MXN_POR_USD}/USD). Puedes cambiar el modelo con <code>BITACORA_MODEL</code> en <code>web/.env.local</code>.
             </p>
           </section>
+
+          <div className="h-px bg-[var(--outline-variant)]" />
+
+          {/* Autorizaciones */}
+          <Autorizaciones />
         </div>
       </main>
     </div>
