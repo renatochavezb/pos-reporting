@@ -36,54 +36,35 @@ export default function Home() {
 
   if (checking) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "#0D0D0D" }}
-      >
-        <span className="loading loading-dots loading-lg" style={{ color: "#FF671D" }} />
+      <div className="dn-brand min-h-screen flex items-center justify-center bg-[var(--surface-container-low)]">
+        <svg viewBox="0 0 24 24" fill="none" className="w-8 h-8 animate-spin">
+          <circle cx="12" cy="12" r="9" stroke="var(--primary)" strokeWidth="2.5" strokeOpacity="0.25" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
       </div>
     );
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{
-        background: "#0D0D0D",
-        backgroundImage:
-          "radial-gradient(ellipse 60% 50% at 50% -10%, rgba(255,103,29,0.10) 0%, transparent 70%)",
-      }}
-    >
-      <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-sm">
+    <div className="dn-brand min-h-screen flex flex-col items-center justify-center px-4 py-10 bg-[var(--surface-container-low)]">
+      <div className="w-full max-w-sm flex flex-col items-center gap-8">
+        {/* Marca */}
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center gap-2">
-            <div style={{ width: 3, height: 28, background: "#FF671D", borderRadius: 2 }} />
-            <span style={{ fontSize: "1.5rem", letterSpacing: "0.08em", color: "#fff", fontWeight: 700 }}>
-              Dulce Noviembre
-            </span>
+          <div className="flex items-center gap-3">
+            <span className="w-[3px] h-8 rounded-full bg-[var(--primary)]" />
+            <span className="font-headline text-3xl text-[var(--on-surface)] leading-none">Dulce Noviembre</span>
           </div>
-          <p style={{ letterSpacing: "0.18em", fontSize: "0.72rem", color: "#888" }}>
-            REPORTES · VENTAS Y MERMA
-          </p>
+          <p className="eyebrow">Reportes · Ventas y Merma</p>
         </div>
 
+        {/* Tarjeta */}
         <form
           onSubmit={handleSubmit}
-          className="w-full flex flex-col gap-4"
-          style={{
-            background: "#141414",
-            border: "1px solid #2A2A2A",
-            borderRadius: "0.75rem",
-            padding: "2rem",
-          }}
+          className="w-full flex flex-col gap-4 bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-2xl p-8 ambient-shadow-md"
         >
-          <div className="flex flex-col gap-1">
-            <p style={{ fontSize: "0.95rem", fontWeight: 600, color: "#fff" }}>
-              Acceder al sistema
-            </p>
-            <p style={{ fontSize: "0.8rem", color: "#666" }}>
-              Acceso restringido · Solo usuarios autorizados
-            </p>
+          <div>
+            <h1 className="font-headline text-2xl text-[var(--on-surface)]">Acceder al sistema</h1>
+            <p className="text-sm text-[var(--on-surface-variant)] mt-1">Acceso restringido · Solo usuarios autorizados</p>
           </div>
 
           <input
@@ -92,7 +73,7 @@ export default function Home() {
             placeholder="Correo"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="input input-bordered w-full"
+            className="w-full rounded-xl border border-[var(--outline-variant)] bg-[var(--surface-container-low)] px-4 py-2.5 text-sm text-[var(--on-surface)] placeholder:text-[var(--on-surface-variant)] outline-none transition-colors focus:border-[var(--primary)]"
           />
           <input
             type="password"
@@ -100,26 +81,26 @@ export default function Home() {
             placeholder="Contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="input input-bordered w-full"
+            className="w-full rounded-xl border border-[var(--outline-variant)] bg-[var(--surface-container-low)] px-4 py-2.5 text-sm text-[var(--on-surface)] placeholder:text-[var(--on-surface-variant)] outline-none transition-colors focus:border-[var(--primary)]"
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="btn w-full"
-            style={{ background: "#FF671D", color: "#fff", border: "none" }}
+            className="w-full rounded-full py-2.5 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60 inline-flex items-center justify-center gap-2"
           >
             {loading ? (
-              <span className="loading loading-spinner loading-xs" />
+              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 animate-spin">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
             ) : (
               "Entrar"
             )}
           </button>
         </form>
 
-        <p style={{ fontSize: "0.72rem", color: "#444", textAlign: "center" }}>
-          Dulce Noviembre · Reportes internos
-        </p>
+        <p className="text-xs text-[var(--on-surface-variant)] text-center">Dulce Noviembre · Reportes internos</p>
       </div>
     </div>
   );
