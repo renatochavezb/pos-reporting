@@ -32,7 +32,8 @@ const W = (s) => new Set(s.split(" ").filter(Boolean));
 const score = (a, b) => { const A = W(a), B = W(b); let i = 0; for (const w of A) if (B.has(w)) i++; return i / (A.size + B.size - i || 1) + ((a.includes(b) || b.includes(a)) ? 0.3 : 0); };
 
 // Alias/abreviaturas que la IA no puede adivinar sola (marca -> nombre del catálogo).
-const ALIAS_HINTS = `- "Baileys" = TIRAMISU CREMA IRLANDESA
+const ALIAS_HINTS = `- "Oreo" (a secas) = COOKIES AND CREAM (el pastel). Si dice "Chees Oreo"/"Cheesecake Oreo" = CHEESECAKE COOKIES AND CREAM.
+- "Baileys" = TIRAMISU CREMA IRLANDESA
 - "Monkey" / "MJ Monkey" / "My Monkey" = MJ MONKEY
 - "Selva" = SELVA NEGRA
 - "Dubai" = PASTEL DUBAI
