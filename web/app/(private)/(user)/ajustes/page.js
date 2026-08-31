@@ -2,6 +2,7 @@ import { createClient } from "@/libs/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import ButtonAccount from "@/components/ButtonAccount";
 import Autorizaciones from "@/components/Autorizaciones";
+import AccesosSucursales from "@/components/AccesosSucursales";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,11 @@ export default async function AjustesPage() {
               Costos en USD (así cobra la API). El equivalente en pesos es <b>aproximado</b> (≈ ${MXN_POR_USD}/USD). Puedes cambiar el modelo con <code>BITACORA_MODEL</code> en <code>web/.env.local</code>.
             </p>
           </section>
+
+          <div className="h-px bg-[var(--outline-variant)]" />
+
+          {/* Accesos de sucursales */}
+          <AccesosSucursales />
 
           <div className="h-px bg-[var(--outline-variant)]" />
 

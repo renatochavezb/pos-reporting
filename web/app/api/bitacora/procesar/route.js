@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
+import { ALIAS_HINTS } from "@/libs/bitacora_ia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -31,20 +32,7 @@ function parte(n) { let x = " " + norm(n) + " "; let size = null; if (/ (GDE|GRA
 const W = (s) => new Set(s.split(" ").filter(Boolean));
 const score = (a, b) => { const A = W(a), B = W(b); let i = 0; for (const w of A) if (B.has(w)) i++; return i / (A.size + B.size - i || 1) + ((a.includes(b) || b.includes(a)) ? 0.3 : 0); };
 
-// Alias/abreviaturas que la IA no puede adivinar sola (marca -> nombre del catálogo).
-const ALIAS_HINTS = `- "Brownie" (a secas) = BROWNIE (el postre). SOLO si dice "galleta brownie" = GALLETA BROWNIE. Son productos distintos, no los confundas.
-- "Oreo" (a secas) = COOKIES AND CREAM (el pastel). Si dice "Chees Oreo"/"Cheesecake Oreo" = CHEESECAKE COOKIES AND CREAM.
-- "Baileys" = TIRAMISU CREMA IRLANDESA
-- "Monkey" / "MJ Monkey" / "My Monkey" = MJ MONKEY
-- "Selva" = SELVA NEGRA
-- "Dubai" = PASTEL DUBAI
-- "Italiano" = ITALIANO DE BODAS
-- "Lovers" = LOVER S CON FRESA
-- "Crepas" / "Mil Crepas" / "Mille Crepe" = MILLE CREPE (Cajeta o Nutella según el sabor)
-- "Fresas" (a secas) = FRESAS CON CREMA
-- "Chees" o "Cheescake" = CHEESECAKE ; "F." = FLAN ; "M." o "Most." = MOSTACHON ; "G." o "Galleta" = GALLETA
-- "Ind." / "Individual" / "Mini" = versión MINI del producto (usa el nombre MINI del catálogo si existe)
-- Corrige errores de dedo (ej. "Tortoja"->"Tortuga", "Manzanela"->"Manzanella", "Heleaso"->"Heleado").`;
+// (ALIAS_HINTS ahora vive en @/libs/bitacora_ia para usarse en un solo lugar.)
 
 export async function POST(req) {
   const session = await auth();

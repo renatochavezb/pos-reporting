@@ -5,17 +5,31 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/libs/supabase/client";
 import toast from "react-hot-toast";
 
+// Dominio interno invisible: el encargado teclea solo el nombre de su sucursal.
+const DOMINIO = "sucursal.dulcenoviembre.mx";
+const slug = (s) =>
+  String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+
+// Correo interno a partir de lo que escribe el usuario.
+function aCorreo(entrada) {
+  const e = String(entrada || "").trim();
+  if (e.includes("@")) return e.toLowerCase();
+  return slug(e) + "@" + DOMINIO;
+}
+// A dónde mandar según el rol.
+const destino = (user) => (user?.user_metadata?.role === "sucursal" ? "/captura" : "/dashboard");
+
 export default function Home() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) router.push("/dashboard");
+      if (data.user) router.push(destino(data.user));
       else setChecking(false);
     });
   }, [router]);
@@ -24,13 +38,16 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: aCorreo(usuario),
+      password,
+    });
     setLoading(false);
     if (error) {
-      toast.error("Correo o contraseña incorrectos");
+      toast.error("Usuario o contraseña incorrectos");
       return;
     }
-    router.push("/dashboard");
+    router.push(destino(data.user));
     router.refresh();
   };
 
@@ -68,11 +85,13 @@ export default function Home() {
           </div>
 
           <input
-            type="email"
+            type="text"
             required
-            placeholder="Correo"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            placeholder="Usuario (nombre de tu sucursal)"
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
             className="w-full rounded-xl border border-[var(--outline-variant)] bg-[var(--surface-container-low)] px-4 py-2.5 text-sm text-[var(--on-surface)] placeholder:text-[var(--on-surface-variant)] outline-none transition-colors focus:border-[var(--primary)]"
           />
           <input

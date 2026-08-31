@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // Rutas privadas que requieren sesión.
-const PROTEGIDAS = ["/dashboard", "/precios", "/nvo", "/ajustes"];
+const PROTEGIDAS = ["/dashboard", "/precios", "/nvo", "/ajustes", "/captura"];
 
 // Chequeo ligero de sesión: solo mira si existe la cookie de auth de Supabase.
 // No importa el cliente de Supabase para mantener el middleware compatible con
@@ -25,5 +25,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/precios/:path*", "/nvo/:path*", "/ajustes/:path*"],
+  matcher: ["/dashboard/:path*", "/precios/:path*", "/nvo/:path*", "/ajustes/:path*", "/captura/:path*"],
 };

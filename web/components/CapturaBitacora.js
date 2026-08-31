@@ -1,0 +1,271 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/libs/supabase/client";
+import toast from "react-hot-toast";
+
+// Reduce la imagen a máx 1600px y la vuelve JPEG.
+function downscale(file, maxDim = 1600) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      try { resolve(cv.toDataURL("image/jpeg", 0.82)); } catch { resolve(null); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+const mxn = (n) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(n || 0));
+const fCorta = (iso) => { try { return new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" }).format(new Date(iso + "T12:00:00")); } catch { return iso; } };
+
+const inputCls = "w-full rounded-lg border border-[var(--outline-variant)] bg-[var(--surface-container-low)] px-3 py-2 text-sm text-[var(--on-surface)] outline-none focus:border-[var(--primary)]";
+
+export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conceptos }) {
+  const router = useRouter();
+  const [imgs, setImgs] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [transcribiendo, setTranscribiendo] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [zoom, setZoom] = useState(null);
+
+  const salir = async () => { const s = createClient(); await s.auth.signOut(); router.push("/"); router.refresh(); };
+
+  const onFiles = async (e) => {
+    const files = [...(e.target.files || [])];
+    if (!files.length) return;
+    setCargando(true);
+    const add = [];
+    for (const f of files) { const d = await downscale(f); if (d) add.push({ id: `${f.name}-${f.size}-${add.length}-${imgs.length}`, url: d }); }
+    setImgs([...imgs, ...add]);
+    setCargando(false);
+    e.target.value = "";
+  };
+  const quitarImg = (id) => setImgs(imgs.filter((x) => x.id !== id));
+
+  const transcribir = async () => {
+    if (!imgs.length || transcribiendo) return;
+    setTranscribiendo(true);
+    const t = toast.loading("Leyendo la bitácora con IA…");
+    try {
+      const r = await fetch("/api/bitacora/transcribir", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagenes: imgs.map((x) => x.url) }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo leer");
+      setDraft(d.rows || []);
+      toast.success(`Se leyeron ${d.rows?.length || 0} renglones. Revísalos y corrige lo que haga falta.`, { id: t, duration: 5000 });
+    } catch (e) { toast.error(e.message, { id: t, duration: 6000 }); }
+    setTranscribiendo(false);
+  };
+
+  const setRow = (i, campo, val) => { const n = [...draft]; n[i] = { ...n[i], [campo]: val }; setDraft(n); };
+  const borrarRow = (i) => setDraft(draft.filter((_, j) => j !== i));
+  const agregarRow = () => setDraft([...(draft || []), { fecha: new Date().toISOString().slice(0, 10), insumo: "", tam: "GD", cantidad: 1, motivo: "caducidad", importe_costo: null }]);
+
+  const guardar = async () => {
+    if (!draft?.length || guardando) return;
+    setGuardando(true);
+    const t = toast.loading("Guardando…");
+    try {
+      const r = await fetch("/api/bitacora/guardar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: draft }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo guardar");
+      toast.success(`Guardado: ${d.renglones} renglones · ${mxn(d.totCosto)}${d.sinCosto ? ` (${d.sinCosto} sin costo)` : ""}`, { id: t, duration: 6000 });
+      setDraft(null); setImgs([]);
+      router.refresh();
+    } catch (e) { toast.error(e.message, { id: t, duration: 6000 }); }
+    setGuardando(false);
+  };
+
+  return (
+    <div className="dn-brand min-h-screen bg-[var(--surface-container-low)]">
+      {/* Encabezado */}
+      <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--outline-variant)]">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-[3px] h-7 rounded-full bg-[var(--primary)]" />
+            <div className="leading-tight">
+              <p className="font-headline text-lg text-[var(--on-surface)]">Dulce Noviembre</p>
+              <p className="eyebrow">Sucursal · {nombre}</p>
+            </div>
+          </div>
+          <button onClick={salir} className="text-xs font-semibold text-[var(--on-surface-variant)] hover:text-[var(--primary)] rounded-full border border-[var(--outline-variant)] px-3 py-1.5">Salir</button>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
+        {/* Tomar foto */}
+        <section className="bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-2xl p-5 flex flex-col gap-4">
+          <div>
+            <h1 className="font-headline text-2xl text-[var(--on-surface)]">Subir bitácora</h1>
+            <p className="text-sm text-[var(--on-surface-variant)] mt-1">Toma la foto de la libreta de merma. La IA la lee y tú revisas antes de guardar.</p>
+          </div>
+
+          <label className="grid place-items-center gap-2 border border-dashed border-[var(--outline-variant)] rounded-2xl p-6 cursor-pointer hover:bg-[var(--surface-container-low)] transition-colors text-center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-9 h-9">
+              <path d="M3 9a2 2 0 0 1 2-2h1.6l1-1.5A2 2 0 0 1 9.3 4.5h5.4a2 2 0 0 1 1.7.9l1 1.6H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <circle cx="12" cy="13" r="3.2" />
+            </svg>
+            <span className="text-sm font-semibold text-[var(--primary)]">{cargando ? "Procesando…" : imgs.length ? "Agregar otra foto" : "Tomar / subir foto"}</span>
+            <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
+          </label>
+
+          {imgs.length > 0 && (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {imgs.map((im) => (
+                  <div key={im.id} className="relative rounded-xl overflow-hidden border border-[var(--outline-variant)]">
+                    <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
+                    <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
+                {transcribiendo ? "Leyendo…" : "Leer con IA"}
+              </button>
+            </>
+          )}
+        </section>
+
+        {/* Borrador editable */}
+        {draft && (
+          <section className="bg-[var(--surface-container-lowest)] border border-[var(--primary)] rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="font-headline text-xl text-[var(--on-surface)]">Revisa y corrige</h2>
+                <p className="text-sm text-[var(--on-surface-variant)]">Borra los que estén mal y corrige nombres, cantidades o fechas.</p>
+              </div>
+              <span className="text-xs text-[var(--on-surface-variant)] whitespace-nowrap">{draft.length} renglones</span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {draft.map((row, i) => (
+                <div key={i} className="rounded-xl border border-[var(--outline-variant)] bg-[var(--surface-container-low)] p-3 flex flex-col gap-2">
+                  <div className="flex items-start gap-2">
+                    <input value={row.insumo} onChange={(e) => setRow(i, "insumo", e.target.value)} placeholder="Producto" className={inputCls + " flex-1 font-medium"} />
+                    <button onClick={() => borrarRow(i)} className="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-[var(--outline-variant)] text-[var(--error)]" title="Borrar">×</button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--on-surface-variant)]">Fecha</span>
+                      <input type="date" value={row.fecha} onChange={(e) => setRow(i, "fecha", e.target.value)} className={inputCls} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--on-surface-variant)]">Cantidad</span>
+                      <input type="number" min="1" value={row.cantidad} onChange={(e) => setRow(i, "cantidad", Number(e.target.value))} className={inputCls} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--on-surface-variant)]">Tamaño</span>
+                      <select value={row.tam} onChange={(e) => setRow(i, "tam", e.target.value)} className={inputCls}>
+                        <option value="GD">Grande</option>
+                        <option value="CH">Chico</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--on-surface-variant)]">Motivo</span>
+                      <select value={row.motivo} onChange={(e) => setRow(i, "motivo", e.target.value)} className={inputCls}>
+                        <option value="caducidad">Caducidad</option>
+                        <option value="daño">Daño</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button onClick={agregarRow} className="rounded-full px-4 py-2.5 text-sm font-semibold border border-[var(--outline-variant)] text-[var(--on-surface-variant)] hover:bg-[var(--surface-container-low)]">+ Agregar renglón</button>
+              <button onClick={guardar} disabled={guardando} className="flex-1 rounded-full py-2.5 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
+                {guardando ? "Guardando…" : "Aceptar y guardar"}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Fotos subidas */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-4 rounded-full bg-[var(--primary)]" />
+            <h2 className="font-headline text-xl text-[var(--on-surface)]">Fotos subidas</h2>
+            <span className="ml-1 text-xs text-[var(--on-surface-variant)]">{fotos.length}</span>
+          </div>
+          {fotos.length === 0 ? (
+            <p className="text-sm text-[var(--on-surface-variant)]">Aún no has subido fotos.</p>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {fotos.map((f) => (
+                <div key={f.id} className="rounded-xl overflow-hidden border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)]">
+                  {f.url ? <img src={f.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(f.url)} /> : <div className="w-full h-24 grid place-items-center text-xs text-[var(--on-surface-variant)]">sin vista</div>}
+                  <p className="text-[11px] text-center text-[var(--on-surface-variant)] py-1">{fCorta(f.fecha)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Transcripciones */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-4 rounded-full bg-[var(--primary)]" />
+            <h2 className="font-headline text-xl text-[var(--on-surface)]">Transcripciones</h2>
+            <span className="ml-1 text-xs text-[var(--on-surface-variant)]">{conceptos.length}</span>
+          </div>
+          {conceptos.length === 0 ? (
+            <p className="text-sm text-[var(--on-surface-variant)]">Todavía no hay transcripciones.</p>
+          ) : (
+            <div className="bg-[var(--surface-container-lowest)] rounded-2xl border border-[var(--outline-variant)] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead className="bg-[var(--surface-container-low)]">
+                    <tr className="font-label text-[10px] uppercase tracking-wider text-[var(--on-surface-variant)]">
+                      <th className="px-3 py-2.5 font-medium">Fecha</th>
+                      <th className="px-3 py-2.5 font-medium">Producto</th>
+                      <th className="px-3 py-2.5 font-medium text-center">Cant.</th>
+                      <th className="px-3 py-2.5 font-medium">Motivo</th>
+                      <th className="px-3 py-2.5 font-medium text-right">Costo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[var(--on-surface)]">
+                    {conceptos.map((c) => (
+                      <tr key={c.id} className="border-t border-[var(--outline-variant)]/60">
+                        <td className="px-3 py-2 text-[var(--on-surface-variant)] whitespace-nowrap">{fCorta(c.fecha)}</td>
+                        <td className="px-3 py-2">{c.insumo}</td>
+                        <td className="px-3 py-2 text-center tnum">{c.cantidad}</td>
+                        <td className="px-3 py-2">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${c.motivo_tipo === "daño" ? "bg-[var(--error)]/12 text-[var(--error)]" : "bg-[var(--primary-container)] text-[var(--on-primary-container)]"}`}>
+                            {c.motivo_tipo === "daño" ? "Daño" : "Caducidad"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right tnum">{c.importe_costo != null ? mxn(c.importe_costo) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+
+      {zoom && (
+        <div className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-4 cursor-zoom-out" onClick={() => setZoom(null)}>
+          <img src={zoom} alt="" className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+    </div>
+  );
+}
