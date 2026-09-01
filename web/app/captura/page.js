@@ -18,12 +18,18 @@ export default async function CapturaPage() {
 
   // Fotos subidas (recientes) + URLs firmadas para poder verlas.
   const { data: fotosRaw } = await supabase
-    .from("bitacora_fotos").select("id,fecha,storage_path,creado_en")
+    .from("bitacora_fotos").select("id,fecha,storage_path,drive_id,origen,creado_en")
     .eq("sucursal", sucursal).order("creado_en", { ascending: false }).limit(60);
   const fotos = [];
   for (const f of fotosRaw || []) {
-    const { data: signed } = await supabase.storage.from("bitacoras").createSignedUrl(f.storage_path, 3600);
-    fotos.push({ id: f.id, fecha: f.fecha, url: signed?.signedUrl || null });
+    let url = null;
+    if (f.origen === "drive" && f.drive_id) {
+      url = `/api/foto?id=${encodeURIComponent(f.drive_id)}`;
+    } else if (f.storage_path) {
+      const { data: signed } = await supabase.storage.from("bitacoras").createSignedUrl(f.storage_path, 3600);
+      url = signed?.signedUrl || null;
+    }
+    fotos.push({ id: f.id, fecha: f.fecha, url });
   }
 
   // Transcripciones registradas (conceptos de la bitácora).

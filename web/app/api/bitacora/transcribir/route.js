@@ -3,6 +3,7 @@ import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
 import { transcribir, costoUSD } from "@/libs/bitacora_ia";
 import { contextoPrecios, costear } from "@/libs/costeo";
+import { driveConfigurado, subirADrive } from "@/libs/drive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -27,20 +28,31 @@ export async function POST(req) {
 
   const supabase = await createClient();
 
-  // 1) Guardar las fotos en Storage + registro en bitacora_fotos.
+  // 1) Guardar las fotos: en Google Drive si está configurado; si no, en Supabase Storage.
   const fecha = hoyMx();
   const folder = sucursal.replace(/\s+/g, "_");
-  const fotos = [];
+  const usarDrive = driveConfigurado();
+  let fotosGuardadas = 0;
   for (let i = 0; i < imagenes.length; i++) {
     const m = /^data:(image\/[a-zA-Z]+);base64,(.+)$/s.exec(String(imagenes[i]));
     if (!m) continue;
     const buf = Buffer.from(m[2], "base64");
     const ext = m[1].split("/")[1] || "jpg";
-    const path = `${folder}/${fecha}/${Date.now()}-${i}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("bitacoras").upload(path, buf, { contentType: m[1], upsert: true });
-    if (!upErr) {
-      await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, subido_por: session.user.email });
-      fotos.push(path);
+    try {
+      if (usarDrive) {
+        const filename = `${fecha} ${sucursal} ${i + 1}.${ext}`;
+        const id = await subirADrive({ buffer: buf, filename, mime: m[1], sucursal });
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, drive_id: id, origen: "drive", subido_por: session.user.email });
+      } else {
+        const path = `${folder}/${fecha}/${Date.now()}-${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("bitacoras").upload(path, buf, { contentType: m[1], upsert: true });
+        if (upErr) throw upErr;
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, origen: "supabase", subido_por: session.user.email });
+      }
+      fotosGuardadas++;
+    } catch (e) {
+      // Si falla el archivado de la foto, seguimos con la transcripción.
+      console.error("guardar foto:", e?.message);
     }
   }
 
@@ -96,5 +108,5 @@ export async function POST(req) {
     });
   } catch {}
 
-  return NextResponse.json({ ok: true, sucursal, fecha, rows, fotos: fotos.length });
+  return NextResponse.json({ ok: true, sucursal, fecha, rows, fotos: fotosGuardadas });
 }
