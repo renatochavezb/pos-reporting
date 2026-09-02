@@ -194,10 +194,11 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
                         <div key={im.id} className={`relative rounded-xl overflow-hidden border-2 ${borde[st] || "border-[var(--outline-variant)]"}`}>
                           <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
                           {st && (
-                            <span className={`absolute bottom-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${st === "ok" ? "bg-[var(--primary)] text-[var(--on-primary)]" : st === "error" ? "bg-[#d97706] text-white" : "bg-black/60 text-white"}`}>
-                              {st === "ok" ? "✓ leída" : st === "error" ? "✗ error" : "leyendo…"}
+                            <span className={`absolute bottom-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${st === "ok" ? "bg-[var(--primary)] text-[var(--on-primary)]" : st === "error" ? "bg-[#d97706] text-white" : "bg-black/60 text-white"}`}>
+                              {st === "ok" ? (<><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-2.5 h-2.5"><path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>Procesada</>) : st === "error" ? "✗ error" : "leyendo…"}
                             </span>
                           )}
+                          {st === "ok" && <div className="absolute inset-0 bg-[var(--primary)]/10 pointer-events-none" />}
                           {!transcribiendo && (
                             <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
                           )}
@@ -205,6 +206,9 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
                       );
                     })}
                   </div>
+                  {imgs.some((im) => estados[im.id] === "ok") && (
+                    <p className="text-[11px] text-[var(--on-surface-variant)]">Las fotos marcadas <b>✓ Procesada</b> ya se leyeron y no se vuelven a procesar.</p>
+                  )}
                   {pendientes > 0 && (
                     <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
                       {transcribiendo ? "Leyendo…" : huboError ? `Reintentar las que faltan (${pendientes})` : imgs.length > 1 ? `Leer con IA (${pendientes} foto${pendientes > 1 ? "s" : ""})` : "Leer con IA"}
