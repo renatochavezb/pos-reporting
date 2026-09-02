@@ -32,17 +32,11 @@ export default async function NvoPage({ params }) {
   const histChart = [...(semanas || [])].reverse();
   const zona = reg?.region === "JUAREZ" ? "Juárez" : "Chihuahua";
 
-  // Historial de fotos subidas de la bitácora (Drive o Supabase).
+  // Historial de fotos subidas: fecha, hora y quién la subió.
   const { data: fotosRaw } = await supabase
-    .from("bitacora_fotos").select("id,fecha,storage_path,drive_id,origen,creado_en")
+    .from("bitacora_fotos").select("id,subido_por,creado_en")
     .eq("sucursal", sucursal).order("creado_en", { ascending: false }).limit(60);
-  const fotos = [];
-  for (const f of fotosRaw || []) {
-    let url = null;
-    if (f.origen === "drive" && f.drive_id) url = `/api/foto?id=${encodeURIComponent(f.drive_id)}`;
-    else if (f.storage_path) { const { data: signed } = await supabase.storage.from("bitacoras").createSignedUrl(f.storage_path, 3600); url = signed?.signedUrl || null; }
-    fotos.push({ id: f.id, fecha: f.fecha, url });
-  }
+  const fotos = (fotosRaw || []).map((f) => ({ id: f.id, creado_en: f.creado_en, subido_por: f.subido_por }));
 
   return (
     <div className="dn-brand flex min-h-screen">
