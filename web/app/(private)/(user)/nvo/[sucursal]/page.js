@@ -5,6 +5,7 @@ import ButtonAccount from "@/components/ButtonAccount";
 import BotonActualizar from "@/components/BotonActualizar";
 import MermaNvo from "@/components/MermaNvo";
 import BitacoraUpload from "@/components/BitacoraUpload";
+import HistorialFotos from "@/components/HistorialFotos";
 import GraficaSemanal from "@/components/GraficaSemanal";
 import TopProductos from "@/components/TopProductos";
 
@@ -30,6 +31,18 @@ export default async function NvoPage({ params }) {
 
   const histChart = [...(semanas || [])].reverse();
   const zona = reg?.region === "JUAREZ" ? "Juárez" : "Chihuahua";
+
+  // Historial de fotos subidas de la bitácora (Drive o Supabase).
+  const { data: fotosRaw } = await supabase
+    .from("bitacora_fotos").select("id,fecha,storage_path,drive_id,origen,creado_en")
+    .eq("sucursal", sucursal).order("creado_en", { ascending: false }).limit(60);
+  const fotos = [];
+  for (const f of fotosRaw || []) {
+    let url = null;
+    if (f.origen === "drive" && f.drive_id) url = `/api/foto?id=${encodeURIComponent(f.drive_id)}`;
+    else if (f.storage_path) { const { data: signed } = await supabase.storage.from("bitacoras").createSignedUrl(f.storage_path, 3600); url = signed?.signedUrl || null; }
+    fotos.push({ id: f.id, fecha: f.fecha, url });
+  }
 
   return (
     <div className="dn-brand flex min-h-screen">
@@ -87,8 +100,17 @@ export default async function NvoPage({ params }) {
               Sube la foto de la libreta donde el personal anota la merma a mano. De esa imagen se transcribe la tabla
               de abajo, idéntica a la del sistema, para poder compararlas.
             </p>
-            <div className="rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] p-5">
-              <BitacoraUpload sucursal={sucursal} />
+            <div className="grid lg:grid-cols-2 gap-4">
+              {/* Izquierda: subir / procesar foto */}
+              <div className="rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] p-5">
+                <p className="eyebrow mb-3">Subir bitácora</p>
+                <BitacoraUpload sucursal={sucursal} />
+              </div>
+              {/* Derecha: historial de fotos subidas */}
+              <div className="rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] p-5">
+                <p className="eyebrow mb-3">Historial de fotos subidas</p>
+                <HistorialFotos fotos={fotos} />
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-2">
               <span className="w-1.5 h-3.5 rounded-full bg-[var(--on-surface-variant)]" />
