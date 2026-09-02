@@ -4,30 +4,21 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
-// Reduce la imagen a máx 1600px y la vuelve JPEG para que quepa en el navegador.
+// Reduce la imagen a máx 1600px y la vuelve JPEG.
 function downscale(file, maxDim = 1600) {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
       const cv = document.createElement("canvas");
-      cv.width = w;
-      cv.height = h;
+      cv.width = w; cv.height = h;
       cv.getContext("2d").drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
-      try {
-        resolve(cv.toDataURL("image/jpeg", 0.82));
-      } catch {
-        resolve(null);
-      }
+      try { resolve(cv.toDataURL("image/jpeg", 0.82)); } catch { resolve(null); }
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
     img.src = url;
   });
 }
@@ -36,45 +27,18 @@ export default function BitacoraUpload({ sucursal }) {
   const router = useRouter();
   const key = `bitacora:${sucursal}`;
   const [imgs, setImgs] = useState([]);
+  const [estados, setEstados] = useState({}); // imgId -> 'leyendo' | 'ok' | 'error'
   const [zoom, setZoom] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [procesando, setProcesando] = useState(false);
 
-  const procesar = async () => {
-    if (!imgs.length || procesando) return;
-    setProcesando(true);
-    const t = toast.loading("Procesando bitácora con IA…");
-    try {
-      const r = await fetch("/api/bitacora/procesar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sucursal, imagenes: imgs.map((x) => x.url) }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Error al procesar");
-      const monto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(data.totCosto || 0);
-      toast.success(`Bitácora cargada: ${data.renglones} renglones · ${monto}${data.sinCosto ? ` (${data.sinCosto} sin costo)` : ""}`, { id: t, duration: 6000 });
-      router.refresh();
-    } catch (e) {
-      toast.error(e.message, { id: t, duration: 7000 });
-    } finally {
-      setProcesando(false);
-    }
-  };
-
   useEffect(() => {
-    try {
-      const s = localStorage.getItem(key);
-      if (s) setImgs(JSON.parse(s));
-    } catch {}
+    try { const s = localStorage.getItem(key); if (s) setImgs(JSON.parse(s)); } catch {}
   }, [key]);
 
-  const persist = (arr) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(arr));
-    } catch {
-      /* si no cabe, se queda solo en memoria de esta sesión */
-    }
+  // Guarda en localStorage solo las que aún NO se han procesado.
+  const persistPendientes = (arr, est) => {
+    try { localStorage.setItem(key, JSON.stringify(arr.filter((x) => est[x.id] !== "ok"))); } catch {}
   };
 
   const onFiles = async (e) => {
@@ -82,22 +46,65 @@ export default function BitacoraUpload({ sucursal }) {
     if (!files.length) return;
     setCargando(true);
     const add = [];
-    for (const f of files) {
-      const d = await downscale(f);
-      if (d) add.push({ id: `${f.name}-${f.size}-${add.length}`, url: d, name: f.name });
-    }
+    for (const f of files) { const d = await downscale(f); if (d) add.push({ id: `${f.name}-${f.size}-${add.length}-${imgs.length}`, url: d, name: f.name }); }
     const next = [...imgs, ...add];
     setImgs(next);
-    persist(next);
+    persistPendientes(next, estados);
     setCargando(false);
     e.target.value = "";
   };
 
-  const remove = (id) => {
+  const quitarImg = (id) => {
     const next = imgs.filter((x) => x.id !== id);
-    setImgs(next);
-    persist(next);
+    const est = { ...estados }; delete est[id];
+    setImgs(next); setEstados(est);
+    persistPendientes(next, est);
   };
+
+  // Procesa UNA foto a la vez: transcribe + guarda. Las ✓ ya no se reprocesan.
+  const procesar = async () => {
+    if (procesando) return;
+    const pendientes = imgs.filter((im) => estados[im.id] !== "ok");
+    if (!pendientes.length) return;
+    setProcesando(true);
+    let ok = 0, fail = 0;
+    const est = { ...estados };
+    for (let n = 0; n < pendientes.length; n++) {
+      const im = pendientes[n];
+      est[im.id] = "leyendo"; setEstados({ ...est });
+      const t = toast.loading(`Procesando foto ${n + 1} de ${pendientes.length}…`);
+      try {
+        const tr = await fetch("/api/bitacora/transcribir", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sucursal, imagenes: [im.url] }),
+        });
+        const dt = await tr.json();
+        if (!tr.ok) throw new Error(dt.error || "no se pudo leer");
+        if (!dt.rows || !dt.rows.length) throw new Error("no se detectaron renglones");
+        const gr = await fetch("/api/bitacora/guardar", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sucursal, rows: dt.rows, imagenes: [im.url] }),
+        });
+        const dg = await gr.json();
+        if (!gr.ok) throw new Error(dg.error || "no se pudo guardar");
+        est[im.id] = "ok"; setEstados({ ...est });
+        ok++;
+        toast.success(`Foto ${n + 1}: ${dg.renglones} renglones guardados`, { id: t, duration: 2500 });
+      } catch (e) {
+        est[im.id] = "error"; setEstados({ ...est });
+        fail++;
+        toast.error(`Foto ${n + 1}: ${e.message}`, { id: t, duration: 5000 });
+      }
+    }
+    persistPendientes(imgs, est);
+    setProcesando(false);
+    if (fail) toast.error(`${fail} foto(s) no se procesaron (en naranja). Reintenta solo esas.`, { duration: 6000 });
+    if (ok) router.refresh();
+  };
+
+  const pendientes = imgs.filter((im) => estados[im.id] !== "ok").length;
+  const huboError = imgs.some((im) => estados[im.id] === "error");
+  const borde = { ok: "border-[var(--primary)]", error: "border-[#d97706]", leyendo: "border-[var(--primary)]" };
 
   return (
     <div className="flex flex-col gap-4">
@@ -110,29 +117,13 @@ export default function BitacoraUpload({ sucursal }) {
           {cargando ? "Procesando…" : imgs.length ? "Agregar otra foto" : "Subir foto de la bitácora"}
           <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
         </label>
-        {imgs.length > 0 && (
-          <button
-            onClick={procesar}
-            disabled={procesando || cargando}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60"
-          >
+        {pendientes > 0 && (
+          <button onClick={procesar} disabled={procesando || cargando} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
             {procesando ? (
-              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 animate-spin">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" />
-                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                <path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15l-2.6.9L18 18.5l-.9-2.6L14.5 15l2.6-.9L18 12zM6 14l.9 2.5L9.5 17l-2.6.9L6 20.5l-.9-2.6L2.5 17l2.6-.9L6 14z" />
-              </svg>
-            )}
-            {procesando ? "Procesando…" : "Procesar bitácora"}
+              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 animate-spin"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.25" /><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+            ) : null}
+            {procesando ? "Procesando…" : huboError ? `Reintentar las que faltan (${pendientes})` : `Procesar bitácora${imgs.length > 1 ? ` (${pendientes})` : ""}`}
           </button>
-        )}
-        {imgs.length > 0 && (
-          <span className="text-xs text-[var(--on-surface-variant)]">
-            {imgs.length} {imgs.length === 1 ? "foto" : "fotos"}
-          </span>
         )}
       </div>
 
@@ -145,32 +136,34 @@ export default function BitacoraUpload({ sucursal }) {
           <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
         </label>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {imgs.map((im) => (
-            <div key={im.id} className="relative group rounded-xl overflow-hidden border border-[var(--outline-variant)]">
-              <img
-                src={im.url}
-                alt={im.name}
-                className="w-full h-32 object-cover cursor-zoom-in"
-                onClick={() => setZoom(im.url)}
-              />
-              <button
-                onClick={() => remove(im.id)}
-                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] text-sm grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Quitar"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {imgs.map((im) => {
+              const st = estados[im.id];
+              return (
+                <div key={im.id} className={`relative group rounded-xl overflow-hidden border-2 ${borde[st] || "border-[var(--outline-variant)]"}`}>
+                  <img src={im.url} alt={im.name} className="w-full h-32 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
+                  {st && (
+                    <span className={`absolute bottom-1.5 left-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${st === "ok" ? "bg-[var(--primary)] text-[var(--on-primary)]" : st === "error" ? "bg-[#d97706] text-white" : "bg-black/60 text-white"}`}>
+                      {st === "ok" ? (<><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-2.5 h-2.5"><path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>Procesada</>) : st === "error" ? "✗ error" : "leyendo…"}
+                    </span>
+                  )}
+                  {st === "ok" && <div className="absolute inset-0 bg-[var(--primary)]/10 pointer-events-none" />}
+                  {!procesando && (
+                    <button onClick={() => quitarImg(im.id)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] text-sm grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar">×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {imgs.some((im) => estados[im.id] === "ok") && (
+            <p className="text-[11px] text-[var(--on-surface-variant)]">Las fotos marcadas <b>✓ Procesada</b> ya se guardaron y no se vuelven a procesar.</p>
+          )}
+        </>
       )}
 
       {zoom && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-4 cursor-zoom-out"
-          onClick={() => setZoom(null)}
-        >
+        <div className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-4 cursor-zoom-out" onClick={() => setZoom(null)}>
           <img src={zoom} alt="Bitácora" className="max-w-full max-h-full rounded-lg" />
         </div>
       )}
