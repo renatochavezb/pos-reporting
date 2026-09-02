@@ -39,6 +39,7 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
   const [errorLectura, setErrorLectura] = useState("");
   const [guardado, setGuardado] = useState(null); // resumen de éxito
   const [zoom, setZoom] = useState(null);
+  const [estados, setEstados] = useState({}); // imgId -> 'leyendo' | 'ok' | 'error'
 
   // Avisa si intenta salir con un borrador sin guardar.
   useEffect(() => {
@@ -61,34 +62,49 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
     setCargando(false);
     e.target.value = "";
   };
-  const quitarImg = (id) => setImgs(imgs.filter((x) => x.id !== id));
+  const quitarImg = (id) => {
+    setImgs(imgs.filter((x) => x.id !== id));
+    setEstados((s) => { const n = { ...s }; delete n[id]; return n; });
+  };
 
+  // Lee UNA foto a la vez (llamada corta e independiente). Las ya leídas no se
+  // vuelven a procesar; si una falla, se puede reintentar solo esa.
   const transcribir = async () => {
-    if (!imgs.length || transcribiendo) return;
+    if (transcribiendo) return;
+    const pendientes = imgs.filter((im) => estados[im.id] !== "ok");
+    if (!pendientes.length) return;
     setTranscribiendo(true);
     setErrorLectura(""); setGuardado(null);
-    const t = toast.loading("Leyendo la bitácora con IA…");
-    try {
-      const r = await fetch("/api/bitacora/transcribir", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagenes: imgs.map((x) => x.url) }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "No se pudo leer");
-      if (!d.rows || d.rows.length === 0) {
-        setDraft(null);
-        setErrorLectura("No se detectaron renglones en la foto. Verifica que se vea bien la libreta y vuelve a tomarla.");
-        toast.dismiss(t);
-        return;
+    let acumulado = draft ? [...draft] : [];
+    let fallidas = 0, leidasOk = 0;
+    for (let n = 0; n < pendientes.length; n++) {
+      const im = pendientes[n];
+      setEstados((s) => ({ ...s, [im.id]: "leyendo" }));
+      const t = toast.loading(`Leyendo foto ${n + 1} de ${pendientes.length}…`);
+      try {
+        const r = await fetch("/api/bitacora/transcribir", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imagenes: [im.url] }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "no se pudo leer");
+        acumulado = [...acumulado, ...(d.rows || [])];
+        setDraft(acumulado);
+        setEstados((s) => ({ ...s, [im.id]: "ok" }));
+        leidasOk++;
+        toast.success(`Foto ${n + 1}: ${(d.rows || []).length} renglones`, { id: t, duration: 2500 });
+      } catch (e) {
+        fallidas++;
+        setEstados((s) => ({ ...s, [im.id]: "error" }));
+        toast.error(`Foto ${n + 1} no se pudo leer`, { id: t, duration: 4000 });
       }
-      setDraft(d.rows);
-      toast.success(`Se leyeron ${d.rows.length} renglones. Revísalos y guarda.`, { id: t, duration: 5000 });
-    } catch (e) {
-      setDraft(null);
-      setErrorLectura("No se pudo leer la foto (" + e.message + "). Vuelve a intentar; si sigue fallando, toma la foto de nuevo con buena luz.");
-      toast.dismiss(t);
     }
     setTranscribiendo(false);
+    if (!acumulado.length && fallidas) {
+      setErrorLectura("No se pudo leer ninguna foto. Vuelve a intentar o tómalas de nuevo con buena luz. Tip: una foto por semana lee más rápido.");
+    } else if (fallidas) {
+      setErrorLectura(`${fallidas} foto(s) no se pudieron leer (marcadas en rojo). Puedes reintentar solo esas con el botón, sin volver a leer las que ya salieron bien.`);
+    }
   };
 
   const setRow = (i, campo, val) => { const n = [...draft]; n[i] = { ...n[i], [campo]: val }; setDraft(n); };
@@ -100,15 +116,18 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
     setGuardando(true);
     const t = toast.loading("Guardando…");
     try {
+      // Solo se archivan las fotos que sí se leyeron (para que foto y datos cuadren).
+      const okImgs = imgs.filter((im) => estados[im.id] === "ok");
+      const aArchivar = (okImgs.length ? okImgs : imgs).map((x) => x.url);
       const r = await fetch("/api/bitacora/guardar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: draft, imagenes: imgs.map((x) => x.url) }),
+        body: JSON.stringify({ rows: draft, imagenes: aArchivar }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "No se pudo guardar");
       toast.success("¡Guardado!", { id: t });
       setGuardado({ renglones: d.renglones, totCosto: d.totCosto, sinCosto: d.sinCosto, fotos: d.fotos });
-      setDraft(null); setImgs([]); setErrorLectura("");
+      setDraft(null); setImgs([]); setErrorLectura(""); setEstados({});
       router.refresh();
     } catch (e) {
       toast.error("No se guardó: " + e.message + ". Intenta de nuevo.", { id: t, duration: 7000 });
@@ -162,21 +181,38 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
               <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
             </label>
 
-            {imgs.length > 0 && (
-              <>
-                <div className="grid grid-cols-3 gap-2">
-                  {imgs.map((im) => (
-                    <div key={im.id} className="relative rounded-xl overflow-hidden border border-[var(--outline-variant)]">
-                      <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
-                      <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
-                  {transcribiendo ? "Leyendo…" : "Leer con IA"}
-                </button>
-              </>
-            )}
+            {imgs.length > 0 && (() => {
+              const pendientes = imgs.filter((im) => estados[im.id] !== "ok").length;
+              const huboError = imgs.some((im) => estados[im.id] === "error");
+              const borde = { ok: "border-[var(--primary)]", error: "border-[#d97706]", leyendo: "border-[var(--primary)]" };
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {imgs.map((im) => {
+                      const st = estados[im.id];
+                      return (
+                        <div key={im.id} className={`relative rounded-xl overflow-hidden border-2 ${borde[st] || "border-[var(--outline-variant)]"}`}>
+                          <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
+                          {st && (
+                            <span className={`absolute bottom-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${st === "ok" ? "bg-[var(--primary)] text-[var(--on-primary)]" : st === "error" ? "bg-[#d97706] text-white" : "bg-black/60 text-white"}`}>
+                              {st === "ok" ? "✓ leída" : st === "error" ? "✗ error" : "leyendo…"}
+                            </span>
+                          )}
+                          {!transcribiendo && (
+                            <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {pendientes > 0 && (
+                    <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
+                      {transcribiendo ? "Leyendo…" : huboError ? `Reintentar las que faltan (${pendientes})` : imgs.length > 1 ? `Leer con IA (${pendientes} foto${pendientes > 1 ? "s" : ""})` : "Leer con IA"}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </section>
         )}
 
