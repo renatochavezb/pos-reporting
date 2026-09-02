@@ -72,12 +72,12 @@ export async function POST(req) {
       if (usarDrive) {
         const filename = `${fecha} ${sucursal} ${i + 1}.${ext}`;
         const id = await subirADrive({ buffer: buf, filename, mime: m[1], sucursal });
-        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, drive_id: id, origen: "drive", subido_por: session.user.email });
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, drive_id: id, origen: "drive", subido_por: session.user.email, leida: true, renglones: registros.length });
       } else {
         const path = `${folder}/${fecha}/${Date.now()}-${i}.${ext}`;
         const { error: upErr } = await supabase.storage.from("bitacoras").upload(path, buf, { contentType: m[1], upsert: true });
         if (upErr) throw upErr;
-        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, origen: "supabase", subido_por: session.user.email });
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, origen: "supabase", subido_por: session.user.email, leida: true, renglones: registros.length });
       }
       fotosGuardadas++;
     } catch (e) {

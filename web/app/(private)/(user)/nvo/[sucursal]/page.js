@@ -34,9 +34,9 @@ export default async function NvoPage({ params }) {
 
   // Historial de fotos subidas: fecha, hora y quién la subió.
   const { data: fotosRaw } = await supabase
-    .from("bitacora_fotos").select("id,subido_por,creado_en")
+    .from("bitacora_fotos").select("id,subido_por,creado_en,leida,renglones")
     .eq("sucursal", sucursal).order("creado_en", { ascending: false }).limit(60);
-  const fotos = (fotosRaw || []).map((f) => ({ id: f.id, creado_en: f.creado_en, subido_por: f.subido_por }));
+  const fotos = (fotosRaw || []).map((f) => ({ id: f.id, creado_en: f.creado_en, subido_por: f.subido_por, leida: f.leida, renglones: f.renglones }));
 
   return (
     <div className="dn-brand flex min-h-screen">
