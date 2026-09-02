@@ -163,6 +163,7 @@ export default function MermaNvo({ rows }) {
               const dCosto = items.reduce((a, x) => a + x.costo, 0);
               const dCad = items.filter((x) => x.b === "caducidad").reduce((a, x) => a + x.costo, 0);
               const dDano = items.filter((x) => x.b === "daño").reduce((a, x) => a + x.costo, 0);
+              const dOtros = items.filter((x) => x.b === "otros").reduce((a, x) => a + x.costo, 0);
               const vacio = items.length === 0;
               return (
                 <div
@@ -210,6 +211,12 @@ export default function MermaNvo({ rows }) {
                           <div className="flex justify-between text-[11px]">
                             <span style={{ color: "var(--error)" }}>Daño</span>
                             <span className="tnum">{peso0(dDano)}</span>
+                          </div>
+                        )}
+                        {dOtros > 0 && (
+                          <div className="flex justify-between text-[11px]">
+                            <span style={{ color: "var(--on-surface-variant)" }}>Sin clasificar</span>
+                            <span className="tnum">{peso0(dOtros)}</span>
                           </div>
                         )}
                         <div className="flex justify-between text-[12px] font-semibold">
