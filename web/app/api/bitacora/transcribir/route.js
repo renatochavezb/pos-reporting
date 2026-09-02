@@ -3,7 +3,6 @@ import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
 import { transcribir, costoUSD } from "@/libs/bitacora_ia";
 import { contextoPrecios, costear } from "@/libs/costeo";
-import { driveConfigurado, subirADrive } from "@/libs/drive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -28,42 +27,17 @@ export async function POST(req) {
 
   const supabase = await createClient();
 
-  // 1) Guardar las fotos: en Google Drive si está configurado; si no, en Supabase Storage.
-  const fecha = hoyMx();
-  const folder = sucursal.replace(/\s+/g, "_");
-  const usarDrive = driveConfigurado();
-  let fotosGuardadas = 0;
-  for (let i = 0; i < imagenes.length; i++) {
-    const m = /^data:(image\/[a-zA-Z]+);base64,(.+)$/s.exec(String(imagenes[i]));
-    if (!m) continue;
-    const buf = Buffer.from(m[2], "base64");
-    const ext = m[1].split("/")[1] || "jpg";
-    try {
-      if (usarDrive) {
-        const filename = `${fecha} ${sucursal} ${i + 1}.${ext}`;
-        const id = await subirADrive({ buffer: buf, filename, mime: m[1], sucursal });
-        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, drive_id: id, origen: "drive", subido_por: session.user.email });
-      } else {
-        const path = `${folder}/${fecha}/${Date.now()}-${i}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("bitacoras").upload(path, buf, { contentType: m[1], upsert: true });
-        if (upErr) throw upErr;
-        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, origen: "supabase", subido_por: session.user.email });
-      }
-      fotosGuardadas++;
-    } catch (e) {
-      // Si falla el archivado de la foto, seguimos con la transcripción.
-      console.error("guardar foto:", e?.message);
-    }
-  }
+  // La foto NO se guarda aquí: se archiva hasta que la persona presione
+  // "Aceptar y guardar" (en /guardar). Así nunca queda una foto sin datos.
 
-  // 2) Región + catálogo de precios.
+  // 1) Región + catálogo de precios.
   const { data: reg } = await supabase.from("sucursal_region").select("region").eq("sucursal", sucursal).maybeSingle();
   const region = reg?.region === "JUAREZ" ? "JUAREZ" : "CHIHUAHUA";
   const { data: precios } = await supabase.from("precios").select("producto,producto_norm,tamano,costo,precio_venta").eq("region", region);
   const ctx = contextoPrecios(precios || []);
   const catalogo = ctx.prods.slice().sort().join("\n");
 
-  // 3) Transcribir con IA.
+  // 2) Transcribir con IA.
   const modelo = process.env.BITACORA_MODEL || "claude-sonnet-5";
   let filas, usage = null;
   try {
@@ -74,7 +48,7 @@ export async function POST(req) {
     return NextResponse.json({ error: esAuth ? "La API key de Anthropic es inválida." : "No se pudo transcribir la imagen: " + (e?.message || "error") }, { status: 500 });
   }
 
-  // 4) Armar borrador costeado (SIN guardar en bitacora_merma todavía).
+  // 3) Armar borrador costeado (SIN guardar todavía).
   const hoy = hoyMx();
   const rows = [];
   for (const f of filas) {
@@ -98,7 +72,7 @@ export async function POST(req) {
     });
   }
 
-  // 5) Registrar el costo de la IA.
+  // 4) Registrar el costo de la IA.
   try {
     await supabase.from("ia_uso").insert({
       sucursal, modelo,
@@ -108,5 +82,5 @@ export async function POST(req) {
     });
   } catch {}
 
-  return NextResponse.json({ ok: true, sucursal, fecha, rows, fotos: fotosGuardadas });
+  return NextResponse.json({ ok: true, sucursal, rows });
 }

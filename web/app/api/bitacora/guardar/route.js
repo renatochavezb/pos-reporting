@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
 import { contextoPrecios, costear } from "@/libs/costeo";
+import { driveConfigurado, subirADrive } from "@/libs/drive";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const okFecha = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+const hoyMx = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
 
 export async function POST(req) {
   const session = await auth();
@@ -17,6 +20,7 @@ export async function POST(req) {
   const meta = session.user.user_metadata || {};
   const sucursal = (meta.role === "sucursal" ? String(meta.sucursal || "") : String(body?.sucursal || "")).toUpperCase().trim();
   const entrada = Array.isArray(body?.rows) ? body.rows : [];
+  const imagenes = Array.isArray(body?.imagenes) ? body.imagenes.slice(0, 6) : [];
   if (!sucursal) return NextResponse.json({ error: "Falta la sucursal" }, { status: 400 });
   if (!entrada.length) return NextResponse.json({ error: "No hay renglones para guardar" }, { status: 400 });
 
@@ -53,7 +57,35 @@ export async function POST(req) {
   const { error: insErr } = await supabase.from("bitacora_merma").insert(registros);
   if (insErr) return NextResponse.json({ error: "Error al guardar: " + insErr.message }, { status: 500 });
 
+  // Ya que se guardaron los datos, archivamos la(s) foto(s): en Drive si está
+  // configurado; si no, en Supabase Storage. Un fallo aquí no tira el guardado.
+  const fecha = hoyMx();
+  const folder = sucursal.replace(/\s+/g, "_");
+  const usarDrive = driveConfigurado();
+  let fotosGuardadas = 0;
+  for (let i = 0; i < imagenes.length; i++) {
+    const m = /^data:(image\/[a-zA-Z]+);base64,(.+)$/s.exec(String(imagenes[i]));
+    if (!m) continue;
+    const buf = Buffer.from(m[2], "base64");
+    const ext = m[1].split("/")[1] || "jpg";
+    try {
+      if (usarDrive) {
+        const filename = `${fecha} ${sucursal} ${i + 1}.${ext}`;
+        const id = await subirADrive({ buffer: buf, filename, mime: m[1], sucursal });
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, drive_id: id, origen: "drive", subido_por: session.user.email });
+      } else {
+        const path = `${folder}/${fecha}/${Date.now()}-${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("bitacoras").upload(path, buf, { contentType: m[1], upsert: true });
+        if (upErr) throw upErr;
+        await supabase.from("bitacora_fotos").insert({ sucursal, fecha, storage_path: path, origen: "supabase", subido_por: session.user.email });
+      }
+      fotosGuardadas++;
+    } catch (e) {
+      console.error("guardar foto:", e?.message);
+    }
+  }
+
   const totCosto = registros.reduce((a, x) => a + (x.importe_costo || 0), 0);
   const sinCosto = registros.filter((x) => x.importe_costo == null).length;
-  return NextResponse.json({ ok: true, sucursal, renglones: registros.length, totCosto, sinCosto });
+  return NextResponse.json({ ok: true, sucursal, renglones: registros.length, totCosto, sinCosto, fotos: fotosGuardadas });
 }

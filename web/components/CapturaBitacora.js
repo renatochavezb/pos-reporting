@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/libs/supabase/client";
 import toast from "react-hot-toast";
@@ -36,7 +36,17 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
   const [transcribiendo, setTranscribiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [draft, setDraft] = useState(null);
+  const [errorLectura, setErrorLectura] = useState("");
+  const [guardado, setGuardado] = useState(null); // resumen de éxito
   const [zoom, setZoom] = useState(null);
+
+  // Avisa si intenta salir con un borrador sin guardar.
+  useEffect(() => {
+    const hayPendiente = draft && draft.length > 0;
+    const handler = (e) => { if (hayPendiente) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [draft]);
 
   const salir = async () => { const s = createClient(); await s.auth.signOut(); router.push("/"); router.refresh(); };
 
@@ -44,6 +54,7 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
     const files = [...(e.target.files || [])];
     if (!files.length) return;
     setCargando(true);
+    setGuardado(null); setErrorLectura("");
     const add = [];
     for (const f of files) { const d = await downscale(f); if (d) add.push({ id: `${f.name}-${f.size}-${add.length}-${imgs.length}`, url: d }); }
     setImgs([...imgs, ...add]);
@@ -55,6 +66,7 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
   const transcribir = async () => {
     if (!imgs.length || transcribiendo) return;
     setTranscribiendo(true);
+    setErrorLectura(""); setGuardado(null);
     const t = toast.loading("Leyendo la bitácora con IA…");
     try {
       const r = await fetch("/api/bitacora/transcribir", {
@@ -63,9 +75,19 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "No se pudo leer");
-      setDraft(d.rows || []);
-      toast.success(`Se leyeron ${d.rows?.length || 0} renglones. Revísalos y corrige lo que haga falta.`, { id: t, duration: 5000 });
-    } catch (e) { toast.error(e.message, { id: t, duration: 6000 }); }
+      if (!d.rows || d.rows.length === 0) {
+        setDraft(null);
+        setErrorLectura("No se detectaron renglones en la foto. Verifica que se vea bien la libreta y vuelve a tomarla.");
+        toast.dismiss(t);
+        return;
+      }
+      setDraft(d.rows);
+      toast.success(`Se leyeron ${d.rows.length} renglones. Revísalos y guarda.`, { id: t, duration: 5000 });
+    } catch (e) {
+      setDraft(null);
+      setErrorLectura("No se pudo leer la foto (" + e.message + "). Vuelve a intentar; si sigue fallando, toma la foto de nuevo con buena luz.");
+      toast.dismiss(t);
+    }
     setTranscribiendo(false);
   };
 
@@ -80,14 +102,17 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
     try {
       const r = await fetch("/api/bitacora/guardar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: draft }),
+        body: JSON.stringify({ rows: draft, imagenes: imgs.map((x) => x.url) }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "No se pudo guardar");
-      toast.success(`Guardado: ${d.renglones} renglones · ${mxn(d.totCosto)}${d.sinCosto ? ` (${d.sinCosto} sin costo)` : ""}`, { id: t, duration: 6000 });
-      setDraft(null); setImgs([]);
+      toast.success("¡Guardado!", { id: t });
+      setGuardado({ renglones: d.renglones, totCosto: d.totCosto, sinCosto: d.sinCosto, fotos: d.fotos });
+      setDraft(null); setImgs([]); setErrorLectura("");
       router.refresh();
-    } catch (e) { toast.error(e.message, { id: t, duration: 6000 }); }
+    } catch (e) {
+      toast.error("No se guardó: " + e.message + ". Intenta de nuevo.", { id: t, duration: 7000 });
+    }
     setGuardando(false);
   };
 
@@ -108,42 +133,73 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-6">
-        {/* Tomar foto */}
-        <section className="bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-2xl p-5 flex flex-col gap-4">
-          <div>
-            <h1 className="font-headline text-2xl text-[var(--on-surface)]">Subir bitácora</h1>
-            <p className="text-sm text-[var(--on-surface-variant)] mt-1">Toma la foto de la libreta de merma. La IA la lee y tú revisas antes de guardar.</p>
+        {/* Éxito */}
+        {guardado && (
+          <div className="rounded-2xl border-2 border-[var(--primary)] bg-[var(--primary-container)] p-5 flex flex-col gap-2 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-[var(--primary)] grid place-items-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--on-primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6"><path d="M20 6 9 17l-5-5" /></svg>
+            </div>
+            <p className="font-headline text-2xl text-[var(--on-primary-container)]">¡Operación exitosa!</p>
+            <p className="text-sm text-[var(--on-primary-container)]">Se guardaron <b>{guardado.renglones}</b> renglones · {mxn(guardado.totCosto)}{guardado.sinCosto ? ` (${guardado.sinCosto} sin costo)` : ""}. Foto archivada ✓</p>
+            <button onClick={() => setGuardado(null)} className="mx-auto mt-2 rounded-full px-5 py-2 text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90">Subir otra bitácora</button>
           </div>
+        )}
 
-          <label className="grid place-items-center gap-2 border border-dashed border-[var(--outline-variant)] rounded-2xl p-6 cursor-pointer hover:bg-[var(--surface-container-low)] transition-colors text-center">
-            <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-9 h-9">
-              <path d="M3 9a2 2 0 0 1 2-2h1.6l1-1.5A2 2 0 0 1 9.3 4.5h5.4a2 2 0 0 1 1.7.9l1 1.6H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <circle cx="12" cy="13" r="3.2" />
-            </svg>
-            <span className="text-sm font-semibold text-[var(--primary)]">{cargando ? "Procesando…" : imgs.length ? "Agregar otra foto" : "Tomar / subir foto"}</span>
-            <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
-          </label>
+        {/* Tomar foto */}
+        {!guardado && (
+          <section className="bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-2xl p-5 flex flex-col gap-4">
+            <div>
+              <h1 className="font-headline text-2xl text-[var(--on-surface)]">Subir bitácora</h1>
+              <p className="text-sm text-[var(--on-surface-variant)] mt-1">Toma la foto de la libreta. La IA la lee, tú revisas y guardas.</p>
+            </div>
 
-          {imgs.length > 0 && (
-            <>
-              <div className="grid grid-cols-3 gap-2">
-                {imgs.map((im) => (
-                  <div key={im.id} className="relative rounded-xl overflow-hidden border border-[var(--outline-variant)]">
-                    <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
-                    <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
-                  </div>
-                ))}
-              </div>
-              <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
-                {transcribiendo ? "Leyendo…" : "Leer con IA"}
+            <label className="grid place-items-center gap-2 border border-dashed border-[var(--outline-variant)] rounded-2xl p-6 cursor-pointer hover:bg-[var(--surface-container-low)] transition-colors text-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-9 h-9">
+                <path d="M3 9a2 2 0 0 1 2-2h1.6l1-1.5A2 2 0 0 1 9.3 4.5h5.4a2 2 0 0 1 1.7.9l1 1.6H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <circle cx="12" cy="13" r="3.2" />
+              </svg>
+              <span className="text-sm font-semibold text-[var(--primary)]">{cargando ? "Procesando…" : imgs.length ? "Agregar otra foto" : "Tomar / subir foto"}</span>
+              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFiles} disabled={cargando} />
+            </label>
+
+            {imgs.length > 0 && (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {imgs.map((im) => (
+                    <div key={im.id} className="relative rounded-xl overflow-hidden border border-[var(--outline-variant)]">
+                      <img src={im.url} alt="" className="w-full h-24 object-cover cursor-zoom-in" onClick={() => setZoom(im.url)} />
+                      <button onClick={() => quitarImg(im.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-[var(--surface-container-lowest)]/90 border border-[var(--outline-variant)] text-[var(--error)] grid place-items-center">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={transcribir} disabled={transcribiendo} className="w-full rounded-full py-3 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
+                  {transcribiendo ? "Leyendo…" : "Leer con IA"}
+                </button>
+              </>
+            )}
+          </section>
+        )}
+
+        {/* Error de lectura */}
+        {errorLectura && (
+          <div className="rounded-2xl border-2 border-[var(--error)] bg-[var(--error)]/8 p-5 flex flex-col gap-3 text-center">
+            <p className="font-headline text-xl text-[var(--error)]">No se pudo leer</p>
+            <p className="text-sm text-[var(--on-surface)]">{errorLectura}</p>
+            {imgs.length > 0 && (
+              <button onClick={transcribir} disabled={transcribiendo} className="mx-auto rounded-full px-5 py-2.5 text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 disabled:opacity-60">
+                {transcribiendo ? "Reintentando…" : "Volver a intentar"}
               </button>
-            </>
-          )}
-        </section>
+            )}
+          </div>
+        )}
 
         {/* Borrador editable */}
         {draft && (
-          <section className="bg-[var(--surface-container-lowest)] border border-[var(--primary)] rounded-2xl p-5 flex flex-col gap-4">
+          <section className="bg-[var(--surface-container-lowest)] border-2 border-[var(--primary)] rounded-2xl p-5 flex flex-col gap-4">
+            <div className="rounded-xl bg-[var(--primary-container)] text-[var(--on-primary-container)] px-4 py-2.5 text-sm font-semibold flex items-center gap-2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 shrink-0"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Aún NO se ha guardado. Revisa y presiona "Aceptar y guardar" al final.
+            </div>
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h2 className="font-headline text-xl text-[var(--on-surface)]">Revisa y corrige</h2>
@@ -189,8 +245,8 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
 
             <div className="flex flex-col sm:flex-row gap-2">
               <button onClick={agregarRow} className="rounded-full px-4 py-2.5 text-sm font-semibold border border-[var(--outline-variant)] text-[var(--on-surface-variant)] hover:bg-[var(--surface-container-low)]">+ Agregar renglón</button>
-              <button onClick={guardar} disabled={guardando} className="flex-1 rounded-full py-2.5 font-label text-sm font-semibold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
-                {guardando ? "Guardando…" : "Aceptar y guardar"}
+              <button onClick={guardar} disabled={guardando} className="flex-1 rounded-full py-3 font-label text-sm font-bold bg-[var(--primary)] text-[var(--on-primary)] hover:opacity-90 transition disabled:opacity-60">
+                {guardando ? "Guardando…" : "✓ Aceptar y guardar"}
               </button>
             </div>
           </section>
