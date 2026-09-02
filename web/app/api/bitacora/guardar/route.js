@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
-import { contextoPrecios, costear } from "@/libs/costeo";
+import { contextoPrecios, costear, mapaAlias } from "@/libs/costeo";
 import { driveConfigurado, subirADrive } from "@/libs/drive";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,8 @@ export async function POST(req) {
   const region = reg?.region === "JUAREZ" ? "JUAREZ" : "CHIHUAHUA";
   const { data: precios } = await supabase.from("precios").select("producto,producto_norm,tamano,costo,precio_venta").eq("region", region);
   const ctx = contextoPrecios(precios || []);
+  const { data: aliasRows } = await supabase.from("alias_bitacora").select("texto,producto_norm,tamano,region");
+  const aliasMap = mapaAlias(aliasRows, region);
 
   const registros = [];
   const fechas = new Set();
@@ -41,7 +43,7 @@ export async function POST(req) {
     const cantidad = Number(f?.cantidad) > 0 ? Number(f.cantidad) : 1;
     const motivo = f?.motivo === "daño" || f?.motivo === "dano" ? "daño" : "caducidad";
     const tam = f?.tam === "CH" ? "CH" : "GD";
-    const c = costear(insumo, tam, ctx);
+    const c = costear(insumo, tam, ctx, null, aliasMap);
     fechas.add(fecha);
     registros.push({
       sucursal, fecha, insumo: c.display, cantidad, motivo_tipo: motivo,

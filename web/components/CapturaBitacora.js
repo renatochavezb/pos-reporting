@@ -210,7 +210,13 @@ export default function CapturaBitacora({ sucursal, nombre, correo, fotos, conce
 
             <div className="flex flex-col gap-3">
               {draft.map((row, i) => (
-                <div key={i} className="rounded-xl border border-[var(--outline-variant)] bg-[var(--surface-container-low)] p-3 flex flex-col gap-2">
+                <div key={i} className={`rounded-xl border bg-[var(--surface-container-low)] p-3 flex flex-col gap-2 ${row.ambiguo ? "border-[#d97706] border-2" : "border-[var(--outline-variant)]"}`}>
+                  {row.ambiguo && (
+                    <p className="text-[11px] font-semibold text-[#b45309] flex items-center gap-1">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      Verifica: hay varios productos parecidos, confirma que sea el correcto.
+                    </p>
+                  )}
                   <div className="flex items-start gap-2">
                     <input value={row.insumo} onChange={(e) => setRow(i, "insumo", e.target.value)} placeholder="Producto" className={inputCls + " flex-1 font-medium"} />
                     <button onClick={() => borrarRow(i)} className="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-[var(--outline-variant)] text-[var(--error)]" title="Borrar">×</button>

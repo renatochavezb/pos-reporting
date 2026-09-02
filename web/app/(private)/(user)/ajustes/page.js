@@ -3,6 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import ButtonAccount from "@/components/ButtonAccount";
 import Autorizaciones from "@/components/Autorizaciones";
 import AccesosSucursales from "@/components/AccesosSucursales";
+import AliasBitacora from "@/components/AliasBitacora";
 
 export const dynamic = "force-dynamic";
 
@@ -113,6 +114,11 @@ export default async function AjustesPage() {
 
           {/* Accesos de sucursales */}
           <AccesosSucursales />
+
+          <div className="h-px bg-[var(--outline-variant)]" />
+
+          {/* Diccionario de nombres */}
+          <AliasBitacora />
 
           <div className="h-px bg-[var(--outline-variant)]" />
 

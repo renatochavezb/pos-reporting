@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/libs/auth";
 import { createClient } from "@/libs/supabase/server";
 import { transcribir, costoUSD } from "@/libs/bitacora_ia";
-import { contextoPrecios, costear } from "@/libs/costeo";
+import { contextoPrecios, costear, mapaAlias } from "@/libs/costeo";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -36,6 +36,8 @@ export async function POST(req) {
   const { data: precios } = await supabase.from("precios").select("producto,producto_norm,tamano,costo,precio_venta").eq("region", region);
   const ctx = contextoPrecios(precios || []);
   const catalogo = ctx.prods.slice().sort().join("\n");
+  const { data: aliasRows } = await supabase.from("alias_bitacora").select("texto,producto_norm,tamano,region");
+  const aliasMap = mapaAlias(aliasRows, region);
 
   // 2) Transcribir con IA.
   const modelo = process.env.BITACORA_MODEL || "claude-sonnet-5";
@@ -60,7 +62,7 @@ export async function POST(req) {
     const cantidad = Number(f?.cantidad) > 0 ? Number(f.cantidad) : 1;
     const motivo = f?.motivo === "daño" || f?.motivo === "dano" ? "daño" : "caducidad";
     const tam = f?.tamano === "CH" ? "CH" : "GD";
-    const c = costear(f?.catalogo || producto, tam, ctx, f?.catalogo);
+    const c = costear(f?.catalogo || producto, tam, ctx, f?.catalogo, aliasMap);
     rows.push({
       fecha: fe,
       cantidad,
@@ -69,6 +71,7 @@ export async function POST(req) {
       tam: c.tam,
       importe_costo: c.importe_unit != null ? c.importe_unit * cantidad : null,
       precio_publico: c.publico,
+      ambiguo: c.ambiguo,
     });
   }
 

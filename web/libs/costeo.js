@@ -54,12 +54,51 @@ function fallback(nombre, tam, ctx) {
   return null;
 }
 
-// Costea un renglón. `catalogo` es la pista opcional de la IA.
-// Devuelve { display, importe_unit, publico, tam } — importe_unit/publico null si no hay precio.
-export function costear(nombre, tam, ctx, catalogo) {
+// ¿El texto escrito puede corresponder a VARIOS productos del catálogo?
+// (p. ej. "Lotus" existe como cheesecake, flan, galleta, tarta…). Se usa para
+// marcar el renglón como "verifica" en la revisión.
+function esAmbiguo(nombre, ctx) {
+  const { base } = parte(nombre);
+  const toks = base.split(" ").filter((w) => w.length >= 4);
+  if (!toks.length) return false;
+  let n = 0;
+  for (const p of ctx.prods) { if (toks.every((w) => p.includes(w))) { n++; if (n > 1) return true; } }
+  return false;
+}
+
+// Costea un renglón. `catalogo` = pista de la IA; `aliasMap` = diccionario
+// { textoNorm: {producto_norm, tamano} }. Devuelve { display, importe_unit,
+// publico, tam, ambiguo }.
+export function costear(nombre, tam, ctx, catalogo, aliasMap) {
   const t = tam === "CH" ? "CH" : "GD";
+
+  // 1) Diccionario de alias (lo definido por el admin manda y NO es ambiguo).
+  if (aliasMap) {
+    for (const cl of [norm(nombre), norm(catalogo || ""), parte(nombre).base]) {
+      const a = cl && aliasMap[cl];
+      if (a) {
+        for (const s of [a.tamano || t, "GD", "CH"]) {
+          const k = a.producto_norm + "|" + s;
+          if (ctx.setP.has(k)) return { display: ctx.disp[a.producto_norm] || a.producto_norm, importe_unit: ctx.cost[k], publico: ctx.pub[k], tam: s, ambiguo: false };
+        }
+      }
+    }
+  }
+
+  // 2) Costeo normal (catálogo de la IA o difuso) + señal de ambigüedad.
+  const amb = esAmbiguo(nombre, ctx);
   const hit = (catalogo ? porCatalogo(catalogo, t, ctx) : null) || fallback(nombre, t, ctx);
-  if (!hit) return { display: nombre, importe_unit: null, publico: null, tam: t };
+  if (!hit) return { display: nombre, importe_unit: null, publico: null, tam: t, ambiguo: amb };
   const k = hit.pn + "|" + hit.t;
-  return { display: ctx.disp[hit.pn] || nombre, importe_unit: ctx.cost[k], publico: ctx.pub[k], tam: hit.t };
+  return { display: ctx.disp[hit.pn] || nombre, importe_unit: ctx.cost[k], publico: ctx.pub[k], tam: hit.t, ambiguo: amb };
+}
+
+// Carga el diccionario de alias de una región como mapa { textoNorm: {producto_norm, tamano} }.
+export function mapaAlias(filas, region) {
+  const m = {};
+  for (const a of filas || []) {
+    if (a.region && a.region !== region) continue;
+    m[norm(a.texto)] = { producto_norm: a.producto_norm, tamano: a.tamano || null };
+  }
+  return m;
 }
